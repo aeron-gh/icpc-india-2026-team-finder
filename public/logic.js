@@ -22,7 +22,6 @@ export const SHOW_GROUPS = [
   {
     label: "Chennai",
     options: [
-      { id: "chennai", label: "Chennai: all selected", test: (team) => Boolean(team.chennai) },
       { id: "chennai-overall", label: "Chennai: overall toppers", test: chennaiIs("Overall topper") },
       { id: "chennai-inst", label: "Chennai: institutional toppers", test: chennaiIs("Institutional topper") },
       { id: "chennai-women", label: "Chennai: all women", test: chennaiIs("All women") },
@@ -31,7 +30,6 @@ export const SHOW_GROUPS = [
   {
     label: "Kanpur",
     options: [
-      { id: "kanpur", label: "Kanpur: all selected", test: selectedAtKanpur },
       { id: "kanpur-waiting", label: "Kanpur: waiting list", test: (team) => team.kanpur?.status === "waiting" },
       { id: "kanpur-women", label: "Kanpur: all women", test: kanpurQuotaIs("All Women") },
       { id: "kanpur-tentative", label: "Kanpur: tentative", test: kanpurQuotaIs("General (Tentative)") },
@@ -40,7 +38,6 @@ export const SHOW_GROUPS = [
   {
     label: "Amritapuri",
     options: [
-      { id: "amritapuri", label: "Amritapuri: all selected", test: (team) => Boolean(team.amritapuri) },
       { id: "amritapuri-Amritapuri", label: "Amritapuri: Amritapuri centre", test: centreIs("Amritapuri") },
       { id: "amritapuri-Bengaluru", label: "Amritapuri: Bengaluru centre", test: centreIs("Bengaluru") },
       { id: "amritapuri-Coimbatore", label: "Amritapuri: Coimbatore centre", test: centreIs("Coimbatore") },
@@ -70,12 +67,19 @@ export function prepareTeams(teams) {
   }));
 }
 
-export function filterTeams(teams, { query = "", show = "all", solved = "", college = "" } = {}) {
+function selectedAtTicked(team, regionals, match) {
+  if (regionals.length === 0) return true;
+  const selectedAt = (regional) => regionalStatus(team, regional).kind === "selected";
+  return match === "all" ? regionals.every(selectedAt) : regionals.some(selectedAt);
+}
+
+export function filterTeams(teams, { query = "", show = "all", solved = "", college = "", regionals = [], match = "any" } = {}) {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   const onList = SHOW_TESTS[show];
   return teams.filter(
     (team) =>
       onList(team) &&
+      selectedAtTicked(team, regionals, match) &&
       (solved === "" || team.solved === Number(solved)) &&
       (college === "" || team.college === college) &&
       words.every((word) => team.search.includes(word)),

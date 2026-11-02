@@ -32,6 +32,14 @@
         <span class="sr">Search</span>
         <input id="search" type="search" placeholder="Search team, college or username" autocomplete="off" spellcheck="false">
       </label>
+      <fieldset class="regional-filter">
+        <legend>Selected at</legend>
+        <div class="checks" id="regionalChecks"></div>
+        <div class="checks" id="matchRule" hidden>
+          <label class="check"><input type="radio" name="match" value="any" checked><span id="matchAny">Any of these</span></label>
+          <label class="check"><input type="radio" name="match" value="all"><span id="matchAll">All of these</span></label>
+        </div>
+      </fieldset>
       <label class="field">
         <span>Show</span>
         <select id="show"></select>

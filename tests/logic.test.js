@@ -109,15 +109,12 @@ test("the Show filter picks the right teams for each list", () => {
     ["selected", ["3 of a Kind", "Hogabhai", "Critical_Path", "bumblebee", "Void / Void_"]],
     ["two", ["3 of a Kind", "Hogabhai", "Void / Void_"]],
     ["none", ["Phi Chance"]],
-    ["chennai", ["3 of a Kind", "Hogabhai", "Critical_Path"]],
     ["chennai-overall", ["3 of a Kind", "Critical_Path"]],
     ["chennai-inst", ["Hogabhai"]],
     ["chennai-women", []],
-    ["kanpur", ["Hogabhai", "bumblebee", "Void / Void_"]],
     ["kanpur-waiting", ["Critical_Path"]],
     ["kanpur-women", ["bumblebee"]],
     ["kanpur-tentative", ["Void / Void_"]],
-    ["amritapuri", ["3 of a Kind", "Void / Void_"]],
     ["amritapuri-Amritapuri", ["3 of a Kind"]],
     ["amritapuri-Coimbatore", ["Void / Void_"]],
     ["amritapuri-Mysuru", []],
@@ -142,8 +139,43 @@ test("the college filter wants the exact college", () => {
 });
 
 test("all filters must match together", () => {
-  const picked = filterTeams(teams, { query: "iit", show: "chennai", solved: "6", college: "" });
+  const picked = filterTeams(teams, { query: "iit", regionals: ["chennai"], solved: "6", college: "" });
   assert.deepEqual(users(picked), ["Critical_Path"]);
+});
+
+test("ticked regionals keep teams selected at any of them by default", () => {
+  const cases = [
+    [["kanpur"], ["Hogabhai", "bumblebee", "Void / Void_"]],
+    [["amritapuri"], ["3 of a Kind", "Void / Void_"]],
+    [["kanpur", "amritapuri"], ["3 of a Kind", "Hogabhai", "bumblebee", "Void / Void_"]],
+    [["chennai", "kanpur", "amritapuri"], ["3 of a Kind", "Hogabhai", "Critical_Path", "bumblebee", "Void / Void_"]],
+  ];
+  for (const [regionals, want] of cases) {
+    assert.deepEqual(users(filterTeams(teams, { regionals })), want, regionals.join());
+  }
+});
+
+test("the all rule keeps only teams selected at every ticked regional", () => {
+  const cases = [
+    [["kanpur", "amritapuri"], ["Void / Void_"]],
+    [["chennai", "amritapuri"], ["3 of a Kind"]],
+    [["chennai", "kanpur"], ["Hogabhai"]],
+    [["chennai", "kanpur", "amritapuri"], []],
+    [["kanpur"], ["Hogabhai", "bumblebee", "Void / Void_"]],
+  ];
+  for (const [regionals, want] of cases) {
+    assert.deepEqual(users(filterTeams(teams, { regionals, match: "all" })), want, regionals.join());
+  }
+});
+
+test("no ticked regionals means no regional limit, whichever rule is set", () => {
+  assert.equal(filterTeams(teams, { regionals: [] }).length, 6);
+  assert.equal(filterTeams(teams, { regionals: [], match: "all" }).length, 6);
+});
+
+test("ticked regionals combine with the Show filter", () => {
+  assert.deepEqual(users(filterTeams(teams, { regionals: ["kanpur"], show: "chennai-inst" })), ["Hogabhai"]);
+  assert.deepEqual(users(filterTeams(teams, { regionals: ["amritapuri"], show: "chennai-inst" })), []);
 });
 
 test("college options are unique and sorted by the name shown", () => {

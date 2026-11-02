@@ -21,7 +21,7 @@ const PAGE_SIZE = 100;
 const LISTS_OUT = REGIONALS.filter((regional) => regional.published);
 const byId = (id) => document.getElementById(id);
 
-const state = { query: "", show: "all", solved: "", college: "", page: 1 };
+const state = { query: "", show: "all", solved: "", college: "", regionals: [], match: "any", page: 1 };
 let teams = [];
 
 function el(tag, props = {}, ...children) {
@@ -107,6 +107,16 @@ function renderTop({ counts, checked }, now) {
 
 /* Filters */
 
+function fillRegionalChecks(counts) {
+  byId("regionalChecks").replaceChildren(
+    ...REGIONALS.map((regional) => {
+      const box = el("input", { type: "checkbox", value: regional.key, disabled: !regional.published });
+      const text = regional.published ? `${regional.name} (${number(counts[regional.key])})` : `${regional.name} (not out)`;
+      return el("label", { className: regional.published ? "check" : "check is-off" }, box, text);
+    }),
+  );
+}
+
 function fillFilters() {
   const groups = SHOW_GROUPS.map((group) => {
     const options = group.options
@@ -141,9 +151,19 @@ function watchFilters() {
   byId("show").addEventListener("change", update("show"));
   byId("solved").addEventListener("change", update("solved"));
   byId("college").addEventListener("change", update("college"));
+  byId("matchRule").addEventListener("change", update("match"));
+
+  const boxes = () => byId("regionalChecks").querySelectorAll("input");
+  byId("regionalChecks").addEventListener("change", () => {
+    state.regionals = [...boxes()].filter((box) => box.checked).map((box) => box.value);
+    state.page = 1;
+    renderTeams();
+  });
 
   byId("clear").addEventListener("click", () => {
-    Object.assign(state, { query: "", show: "all", solved: "", college: "", page: 1 });
+    Object.assign(state, { query: "", show: "all", solved: "", college: "", regionals: [], match: "any", page: 1 });
+    for (const box of boxes()) box.checked = false;
+    document.querySelector('input[name="match"][value="any"]').checked = true;
     byId("search").value = "";
     byId("show").value = "all";
     byId("solved").value = "";
@@ -270,7 +290,18 @@ function teamRow(team) {
   return row;
 }
 
+function renderMatchRule() {
+  const { regionals } = state;
+  byId("matchRule").hidden = regionals.length < 2;
+  if (regionals.length < 2) return;
+  const any = filterTeams(teams, { regionals, match: "any" }).length;
+  const all = filterTeams(teams, { regionals, match: "all" }).length;
+  byId("matchAny").textContent = `Any of these (${number(any)})`;
+  byId("matchAll").textContent = `All of these (${number(all)})`;
+}
+
 function renderTeams() {
+  renderMatchRule();
   const view = paginate(filterTeams(teams, state), state.page, PAGE_SIZE);
   state.page = view.page;
   const found = view.total > 0;
@@ -284,7 +315,7 @@ function renderTeams() {
   byId("prev").disabled = view.page === 1;
   byId("nextPage").disabled = view.page === view.pages;
   byId("result").textContent = resultText(view);
-  byId("clear").hidden = !(state.query || state.show !== "all" || state.solved || state.college);
+  byId("clear").hidden = !(state.query || state.show !== "all" || state.solved || state.college || state.regionals.length);
 }
 
 async function start() {
@@ -296,6 +327,7 @@ async function start() {
     const now = new Date();
     renderTop(data, now);
     renderHead();
+    fillRegionalChecks(data.counts);
     fillFilters();
     watchFilters();
     renderTeams();

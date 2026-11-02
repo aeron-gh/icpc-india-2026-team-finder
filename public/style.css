@@ -217,6 +217,39 @@ main {
   grid-column: 1 / -1;
 }
 
+.regional-filter {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.regional-filter legend {
+  padding: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 20px;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  cursor: pointer;
+}
+
+.check.is-off {
+  color: var(--muted);
+  cursor: default;
+}
+
 input,
 select {
   display: block;
@@ -229,6 +262,15 @@ select {
   color: var(--ink);
   font: inherit;
   font-size: 15px;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--ac);
 }
 
 #search {
