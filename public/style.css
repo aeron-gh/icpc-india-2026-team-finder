@@ -65,11 +65,44 @@ a {
 
 /* Top of the page */
 
+.title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 24px;
+  margin-bottom: 8px;
+}
+
 h1 {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 30px;
   font-weight: 700;
   line-height: 1.15;
+}
+
+.repo-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.repo-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--ink);
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.repo-link:hover {
+  border-color: var(--ink);
 }
 
 .lead {
@@ -520,6 +553,10 @@ footer {
 
   h1 {
     font-size: 26px;
+  }
+
+  .title-row {
+    margin-bottom: 14px;
   }
 
   .lead {
