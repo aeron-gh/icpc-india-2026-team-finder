@@ -9,15 +9,16 @@ import {
   filterTeams,
   isClosed,
   nextDeadline,
+  number,
   paginate,
   prepareTeams,
   regionalStatus,
+  resultText,
   submissionLinks,
 } from "./logic.js";
 
 const PAGE_SIZE = 100;
 const LISTS_OUT = REGIONALS.filter((regional) => regional.published);
-const number = (value) => value.toLocaleString("en-IN");
 const byId = (id) => document.getElementById(id);
 
 const state = { query: "", show: "all", solved: "", college: "", page: 1 };
@@ -215,12 +216,19 @@ function detailRow(team) {
   const list = el("dl", {});
   for (const [term, value] of entries) list.append(el("dt", {}, term), el("dd", {}, value));
 
-  const problems = submissionLinks(team).map((problem) =>
-    problem.solved
-      ? externalLink(problem.code, problem.url, { className: "problem-link" })
-      : el("span", { className: "problem-no" }, `${problem.code} not solved`),
+  const problems = submissionLinks(team);
+  const solved = problems.filter((problem) => problem.solved);
+  const unsolved = problems.filter((problem) => !problem.solved);
+  list.append(
+    el("dt", {}, "See submissions"),
+    el("dd", {}, ...solved.map((problem) => externalLink(problem.code, problem.url, { className: "problem-link" }))),
   );
-  list.append(el("dt", {}, "Submissions"), el("dd", {}, ...problems));
+  if (unsolved.length) {
+    list.append(
+      el("dt", {}, "Not solved"),
+      el("dd", {}, ...unsolved.map((problem) => el("span", { className: "problem-no" }, problem.code))),
+    );
+  }
 
   const span = 6 + LISTS_OUT.length;
   return el("tr", { className: "detail" }, el("td", { colSpan: span }, list));
@@ -275,9 +283,7 @@ function renderTeams() {
   byId("page").textContent = `Page ${view.page} of ${view.pages}`;
   byId("prev").disabled = view.page === 1;
   byId("nextPage").disabled = view.page === view.pages;
-  byId("result").textContent = found
-    ? `Showing ${number(view.start)}–${number(view.end)} of ${number(view.total)} teams`
-    : "0 teams";
+  byId("result").textContent = resultText(view);
   byId("clear").hidden = !(state.query || state.show !== "all" || state.solved || state.college);
 }
 

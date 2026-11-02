@@ -201,7 +201,7 @@ main {
 
 .controls {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr auto;
+  grid-template-columns: 2fr 1fr 1fr;
   gap: 10px 12px;
   align-items: end;
 }
@@ -260,17 +260,32 @@ button:disabled {
 }
 
 .text-button {
-  min-height: 42px;
+  min-height: 32px;
+  padding: 4px 0;
   border-color: transparent;
   color: var(--link);
+  font-size: 13px;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
+.result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+  margin-top: 16px;
+}
+
 .result {
-  margin: 20px 0 6px;
+  margin: 0;
   color: var(--muted);
   font-size: 13px;
+}
+
+#legend {
+  margin: 0 0 10px;
 }
 
 /* The team table */
@@ -410,14 +425,19 @@ a.dot:hover::before {
   overflow-wrap: anywhere;
 }
 
-.detail .problem-link {
+.detail .problem-link,
+.detail .problem-no {
+  display: inline-block;
   margin-right: 10px;
+  white-space: nowrap;
+}
+
+.detail .problem-link {
   color: var(--ac);
   font-weight: 600;
 }
 
 .detail .problem-no {
-  margin-right: 10px;
   color: var(--muted);
 }
 
@@ -431,10 +451,6 @@ a.dot:hover::before {
   align-items: center;
   gap: 14px;
   margin-top: 16px;
-}
-
-#legend {
-  margin-top: 14px;
 }
 
 footer {
@@ -487,11 +503,7 @@ footer {
   }
 
   .controls {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .field-wide {
-    grid-column: 1 / -1;
+    grid-template-columns: 1fr;
   }
 
   #search {

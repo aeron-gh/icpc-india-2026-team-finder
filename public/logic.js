@@ -104,6 +104,13 @@ export function paginate(items, page, size) {
   };
 }
 
+export const number = (value) => value.toLocaleString("en-IN");
+
+export function resultText({ start, end, total, pages }) {
+  if (pages > 1) return `Showing ${number(start)}–${number(end)} of ${number(total)} teams`;
+  return total === 1 ? "1 team" : `${number(total)} teams`;
+}
+
 export function submissionLinks(team) {
   return PROBLEMS.map((code, index) => {
     const solved = team.problems[index] === "1";

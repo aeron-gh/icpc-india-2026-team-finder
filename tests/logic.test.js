@@ -7,6 +7,7 @@ import {
   paginate,
   prepareTeams,
   regionalStatus,
+  resultText,
   submissionLinks,
   isClosed,
 } from "../public/logic.js";
@@ -171,6 +172,17 @@ test("paging moves a too-high or too-low page back inside the list", () => {
 
 test("paging an empty list reports no teams instead of a broken range", () => {
   assert.deepEqual(paginate([], 1, 100), { items: [], page: 1, pages: 1, start: 0, end: 0, total: 0 });
+});
+
+test("the result line counts teams in plain words", () => {
+  const cases = [
+    [{ start: 1, end: 100, total: 3884, pages: 39 }, "Showing 1–100 of 3,884 teams"],
+    [{ start: 3801, end: 3884, total: 3884, pages: 39 }, "Showing 3,801–3,884 of 3,884 teams"],
+    [{ start: 1, end: 96, total: 96, pages: 1 }, "96 teams"],
+    [{ start: 1, end: 1, total: 1, pages: 1 }, "1 team"],
+    [{ start: 0, end: 0, total: 0, pages: 1 }, "0 teams"],
+  ];
+  for (const [view, want] of cases) assert.equal(resultText(view), want);
 });
 
 test("submission links exist only for solved problems", () => {

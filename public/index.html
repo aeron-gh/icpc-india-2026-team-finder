@@ -30,9 +30,9 @@
     <div class="controls">
       <label class="field field-search">
         <span class="sr">Search</span>
-        <input id="search" type="search" placeholder="Search team, college, username or Team ID" autocomplete="off" spellcheck="false">
+        <input id="search" type="search" placeholder="Search team, college or username" autocomplete="off" spellcheck="false">
       </label>
-      <label class="field field-wide">
+      <label class="field">
         <span>Show</span>
         <select id="show"></select>
       </label>
@@ -40,14 +40,18 @@
         <span>Solved</span>
         <select id="solved"></select>
       </label>
-      <label class="field field-wide">
+      <label class="field">
         <span>College</span>
         <select id="college"></select>
       </label>
+    </div>
+
+    <div class="result-row">
+      <p class="result" id="result" role="status">Loading teams...</p>
       <button type="button" class="text-button" id="clear" hidden>Clear filters</button>
     </div>
 
-    <p class="result" id="result" role="status">Loading teams...</p>
+    <p class="fine" id="legend" hidden>Filled dots are solved problems. Select one to see that team's submissions on CodeChef. Rank comes from the final selection pool. Each regional picks teams by its own rules, so a higher rank does not always mean selected.</p>
 
     <table class="teams" id="teams" hidden>
       <thead><tr id="head"></tr></thead>
@@ -63,8 +67,6 @@
       <span id="page"></span>
       <button type="button" id="nextPage">Next</button>
     </nav>
-
-    <p class="fine" id="legend" hidden>Filled dots are solved problems. Click one to see that submission on CodeChef. Rank comes from the final selection pool. Each regional picks teams by its own rules, so a higher rank does not always mean selected.</p>
   </main>
 
   <footer>
