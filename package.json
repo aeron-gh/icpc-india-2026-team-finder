@@ -1,0 +1,9 @@
+{
+  "name": "icpc-india-2026-team-finder",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"tests/*.test.js\" && python3 -m unittest discover -s tests",
+    "data": "python3 -I scripts/build_data.py"
+  }
+}

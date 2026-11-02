@@ -1,0 +1,141 @@
+// The rules behind the page: search, filters, paging, links and deadlines.
+// Nothing here touches the page, so tests can run it without a browser.
+
+export const PROBLEMS = ["PHNCHRG", "IC26CS", "IC26MP", "IC26CB", "IC26SH", "IC26LR", "IC26TM", "IC26AM", "IC26MM", "IC26BM"];
+
+const selectedAtKanpur = (team) => team.kanpur?.status === "selected";
+const selectedCount = (team) => Boolean(team.amritapuri) + Boolean(team.chennai) + selectedAtKanpur(team);
+const chennaiIs = (category) => (team) => team.chennai?.category === category;
+const kanpurQuotaIs = (quota) => (team) => selectedAtKanpur(team) && team.kanpur.quota === quota;
+const centreIs = (centre) => (team) => team.amritapuri?.centre === centre;
+
+export const SHOW_GROUPS = [
+  {
+    label: "All regionals",
+    options: [
+      { id: "all", label: "All teams", test: () => true },
+      { id: "selected", label: "Selected at any regional", test: (team) => selectedCount(team) > 0 },
+      { id: "two", label: "Selected at two regionals", test: (team) => selectedCount(team) === 2 },
+      { id: "none", label: "Not on any list yet", test: (team) => !team.amritapuri && !team.chennai && !team.kanpur },
+    ],
+  },
+  {
+    label: "Chennai",
+    options: [
+      { id: "chennai", label: "Chennai: all selected", test: (team) => Boolean(team.chennai) },
+      { id: "chennai-overall", label: "Chennai: overall toppers", test: chennaiIs("Overall topper") },
+      { id: "chennai-inst", label: "Chennai: institutional toppers", test: chennaiIs("Institutional topper") },
+      { id: "chennai-women", label: "Chennai: all women", test: chennaiIs("All women") },
+    ],
+  },
+  {
+    label: "Kanpur",
+    options: [
+      { id: "kanpur", label: "Kanpur: all selected", test: selectedAtKanpur },
+      { id: "kanpur-waiting", label: "Kanpur: waiting list", test: (team) => team.kanpur?.status === "waiting" },
+      { id: "kanpur-women", label: "Kanpur: all women", test: kanpurQuotaIs("All Women") },
+      { id: "kanpur-tentative", label: "Kanpur: tentative", test: kanpurQuotaIs("General (Tentative)") },
+    ],
+  },
+  {
+    label: "Amritapuri",
+    options: [
+      { id: "amritapuri", label: "Amritapuri: all selected", test: (team) => Boolean(team.amritapuri) },
+      { id: "amritapuri-Amritapuri", label: "Amritapuri: Amritapuri centre", test: centreIs("Amritapuri") },
+      { id: "amritapuri-Bengaluru", label: "Amritapuri: Bengaluru centre", test: centreIs("Bengaluru") },
+      { id: "amritapuri-Coimbatore", label: "Amritapuri: Coimbatore centre", test: centreIs("Coimbatore") },
+      { id: "amritapuri-Mysuru", label: "Amritapuri: Mysuru centre", test: centreIs("Mysuru") },
+    ],
+  },
+];
+
+const SHOW_TESTS = Object.fromEntries(
+  SHOW_GROUPS.flatMap((group) => group.options.map((option) => [option.id, option.test])),
+);
+
+// Search looks through one lowercase string per team, built once on load.
+export function prepareTeams(teams) {
+  return teams.map((team) => ({
+    ...team,
+    search: [
+      team.name,
+      ...(team.names ?? []).flatMap((entry) => [entry.name, entry.id]),
+      team.user,
+      team.college,
+      team.short,
+      team.kanpur?.id ?? "",
+    ]
+      .join(" ")
+      .toLowerCase(),
+  }));
+}
+
+export function filterTeams(teams, { query = "", show = "all", solved = "", college = "" } = {}) {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const onList = SHOW_TESTS[show];
+  return teams.filter(
+    (team) =>
+      onList(team) &&
+      (solved === "" || team.solved === Number(solved)) &&
+      (college === "" || team.college === college) &&
+      words.every((word) => team.search.includes(word)),
+  );
+}
+
+export function collegeOptions(teams) {
+  const labels = new Map(teams.map((team) => [team.college, team.short]));
+  return [...labels]
+    .map(([value, label]) => ({ value, label }))
+    .sort((a, b) => a.label.localeCompare(b.label, "en", { sensitivity: "base" }));
+}
+
+export function paginate(items, page, size) {
+  const total = items.length;
+  const pages = Math.max(1, Math.ceil(total / size));
+  const current = Math.min(Math.max(page, 1), pages);
+  const from = (current - 1) * size;
+  return {
+    items: items.slice(from, from + size),
+    page: current,
+    pages,
+    start: total === 0 ? 0 : from + 1,
+    end: Math.min(from + size, total),
+    total,
+  };
+}
+
+export function submissionLinks(team) {
+  return PROBLEMS.map((code, index) => {
+    const solved = team.problems[index] === "1";
+    const url = solved
+      ? `https://www.codechef.com/ICPCOL2026/status/${code}?usernames=${encodeURIComponent(team.user)}`
+      : null;
+    return { code, solved, url };
+  });
+}
+
+export function regionalStatus(team, regional) {
+  const none = { kind: "none", text: "" };
+  if (regional === "amritapuri") {
+    return team.amritapuri ? { kind: "selected", text: team.amritapuri.centre } : none;
+  }
+  if (regional === "chennai") {
+    return team.chennai ? { kind: "selected", text: team.chennai.category } : none;
+  }
+  if (!team.kanpur) return none;
+  return team.kanpur.status === "waiting"
+    ? { kind: "waiting", text: `Waiting list #${team.kanpur.number}` }
+    : { kind: "selected", text: team.kanpur.quota };
+}
+
+export function isClosed(iso, now) {
+  return now >= new Date(iso);
+}
+
+export function nextDeadline(regionals, now) {
+  const open = regionals
+    .flatMap((regional) => regional.deadlines.map((deadline) => ({ regional: regional.name, ...deadline })))
+    .filter((deadline) => !isClosed(deadline.iso, now))
+    .sort((a, b) => new Date(a.iso) - new Date(b.iso));
+  return open[0] ?? null;
+}

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ICPC India 2026 Team Finder</title>
+<meta name="description" content="Unofficial lookup for ICPC India 2026 teams: rank, regional status, deadlines and submission links in one place.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%230b7a4b'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>ICPC India 2026 Team Finder</h1>
+    <p class="lead" id="summary"></p>
+    <p class="fine" id="checked">Unofficial page. Always confirm on the official sites.</p>
+    <p class="next" id="next" hidden></p>
+  </header>
+
+  <details class="dates" id="dates" open>
+    <summary>Dates and deadlines</summary>
+    <div class="regionals" id="regionals"></div>
+  </details>
+
+  <main id="finder">
+    <div class="controls">
+      <label class="field field-search">
+        <span class="sr">Search</span>
+        <input id="search" type="search" placeholder="Search team, college, username or Team ID" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="field field-wide">
+        <span>Show</span>
+        <select id="show"></select>
+      </label>
+      <label class="field">
+        <span>Solved</span>
+        <select id="solved"></select>
+      </label>
+      <label class="field field-wide">
+        <span>College</span>
+        <select id="college"></select>
+      </label>
+      <button type="button" class="text-button" id="clear" hidden>Clear filters</button>
+    </div>
+
+    <p class="result" id="result" role="status">Loading teams...</p>
+
+    <table class="teams" id="teams" hidden>
+      <thead><tr id="head"></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+
+    <div class="empty" id="empty" hidden>
+      <p>No teams match. Check the spelling or clear the filters.</p>
+    </div>
+
+    <nav class="pager" id="pager" aria-label="Pages" hidden>
+      <button type="button" id="prev">Previous</button>
+      <span id="page"></span>
+      <button type="button" id="nextPage">Next</button>
+    </nav>
+
+    <p class="fine" id="legend" hidden>Filled dots are solved problems. Click one to see that submission on CodeChef. Rank comes from the final selection pool. Each regional picks teams by its own rules, so a higher rank does not always mean selected.</p>
+  </main>
+
+  <footer>
+    <ul class="links" id="links"></ul>
+  </footer>
+</div>
+<noscript><p class="page">This page needs JavaScript to search the team list.</p></noscript>
+</body>
+</html>
