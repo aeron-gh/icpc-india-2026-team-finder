@@ -1,0 +1,5 @@
+.superpowers/
+.cache/
+tests/
+scripts/
+__pycache__/
