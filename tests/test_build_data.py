@@ -135,7 +135,8 @@ class ParseChennai(unittest.TestCase):
     def test_gives_each_team_a_plain_category_and_counts_open_slots(self):
         html = chennai_page(
             ("1", "A", "8", "icpcol1", "X", "Overall Topper"),
-            ("48", "B", "6", "icpcol2", "Y", "Institutional Toppers"),
+            ("48", "B", "6", "icpcol2", "Y", "Institutional Topper"),
+            ("49", "D", "6", "icpcol4", "Y", "Institutional Toppers"),
             ("117", "C", "4", "icpcol3", "Z", "ALL Women Team"),
             ("118", "To Be Announced", "—", "—", "To Be Announced", "ALL Women Team"),
         )
@@ -143,9 +144,10 @@ class ParseChennai(unittest.TestCase):
         self.assertEqual(
             teams,
             {
-                "icpcol1": {"category": "Overall topper"},
-                "icpcol2": {"category": "Institutional topper"},
-                "icpcol3": {"category": "All women"},
+                "icpcol1": {"status": "selected", "category": "Overall topper"},
+                "icpcol2": {"status": "selected", "category": "Institutional topper"},
+                "icpcol4": {"status": "selected", "category": "Institutional topper"},
+                "icpcol3": {"status": "selected", "category": "All women"},
             },
         )
         self.assertEqual(open_slots, 1)
@@ -159,6 +161,56 @@ class ParseChennai(unittest.TestCase):
         html = chennai_page(("1", "Real Team", "8", "—", "X", "Overall Topper"))
         with self.assertRaises(bd.DataError):
             bd.parse_chennai(html)
+
+
+WAITLIST_CODE = (
+    'let l=[{sno:1,category:"Overall Topper",teamName:"3 of a Kind",institute:"IIT",username:"icpcol260148",problemsSolved:8}],'
+    'r=[{sno:1,category:"Waitlist",teamName:"HIT",institute:"National Institute of Technology, Calicut",username:"icpcol262384",problemsSolved:4},'
+    '{sno:2,category:"Waitlist",teamName:"say \\"hi\\"",institute:"X",username:"icpcol263540",problemsSolved:4}],m=["All"];'
+)
+
+
+def waitlist_page(stated):
+    return f"<div><span>120</span> Total Selected</div><div><span>{stated}</span> <span>Waitlisted Teams</span></div>"
+
+
+class ChennaiWaitlist(unittest.TestCase):
+    def test_reads_only_waitlist_rows_with_their_numbers(self):
+        self.assertEqual(
+            bd.parse_chennai_waitlist(waitlist_page(2), WAITLIST_CODE),
+            {
+                "icpcol262384": {"status": "waiting", "number": 1},
+                "icpcol263540": {"status": "waiting", "number": 2},
+            },
+        )
+
+    def test_stops_when_rows_do_not_match_the_stated_count(self):
+        with self.assertRaises(bd.DataError):
+            bd.parse_chennai_waitlist(waitlist_page(59), WAITLIST_CODE)
+
+    def test_stops_when_the_page_no_longer_states_a_count(self):
+        with self.assertRaises(bd.DataError):
+            bd.parse_chennai_waitlist("<div>120 Total Selected</div>", WAITLIST_CODE)
+
+    def test_finds_the_file_that_holds_the_list(self):
+        html = '<script src="/_next/static/chunks/app/contest-info/official-ranklist/page-709e4e205e211bca.js" async></script>'
+        self.assertEqual(
+            bd.chennai_code_path(html),
+            "/_next/static/chunks/app/contest-info/official-ranklist/page-709e4e205e211bca.js",
+        )
+
+    def test_stops_when_that_file_cannot_be_found(self):
+        with self.assertRaises(bd.DataError):
+            bd.chennai_code_path('<script src="/other.js"></script>')
+
+    def test_combines_selected_and_waiting_teams(self):
+        selected = {"a": {"status": "selected", "category": "Overall topper"}}
+        waiting = {"b": {"status": "waiting", "number": 1}}
+        self.assertEqual(bd.combine_chennai(selected, waiting), {**selected, **waiting})
+
+    def test_stops_when_a_team_is_both_selected_and_waiting(self):
+        with self.assertRaises(bd.DataError):
+            bd.combine_chennai({"a": {"status": "selected", "category": "All women"}}, {"a": {"status": "waiting", "number": 1}})
 
 
 class ParseAmritapuri(unittest.TestCase):
@@ -225,13 +277,13 @@ class LinkKanpur(unittest.TestCase):
 
 class BuildDataset(unittest.TestCase):
     def teams(self):
-        return [{"user": u, "name": u} for u in ("both", "kanpur", "wait", "none")]
+        return [{"user": u, "name": u} for u in ("both", "kanpur", "wait", "cwait", "none")]
 
     def build(self, amritapuri=None):
         return bd.build_dataset(
             self.teams(),
             amritapuri if amritapuri is not None else {"both": {"centre": "Mysuru", "rank": 1}},
-            {"both": {"category": "Overall topper"}},
+            {"both": {"status": "selected", "category": "Overall topper"}, "cwait": {"status": "waiting", "number": 1}},
             4,
             {
                 "kanpur": {"status": "selected", "number": 1, "id": "1", "quota": "General"},
@@ -243,7 +295,8 @@ class BuildDataset(unittest.TestCase):
     def test_attaches_each_list_to_the_right_team(self):
         by_user = {t["user"]: t for t in self.build()["teams"]}
         self.assertEqual(by_user["both"]["amritapuri"], {"centre": "Mysuru", "rank": 1})
-        self.assertEqual(by_user["both"]["chennai"], {"category": "Overall topper"})
+        self.assertEqual(by_user["both"]["chennai"], {"status": "selected", "category": "Overall topper"})
+        self.assertEqual(by_user["cwait"]["chennai"], {"status": "waiting", "number": 1})
         self.assertEqual(by_user["wait"]["kanpur"]["status"], "waiting")
         self.assertEqual(set(by_user["none"]), {"user", "name"})
 
@@ -253,18 +306,34 @@ class BuildDataset(unittest.TestCase):
         self.assertEqual(
             data["counts"],
             {
-                "pool": 4,
+                "pool": 5,
                 "selected": 2,
                 "two_regionals": 1,
-                "kanpur_waiting_only": 1,
+                "waiting_only": 2,
                 "not_listed": 1,
                 "amritapuri": 1,
                 "chennai": 1,
+                "chennai_waiting": 1,
                 "chennai_open_women": 4,
                 "kanpur": 1,
                 "kanpur_waiting": 1,
             },
         )
+
+    def test_a_waiting_list_place_does_not_count_as_selected(self):
+        data = bd.build_dataset(
+            [{"user": "x", "name": "x"}],
+            {},
+            {"x": {"status": "waiting", "number": 3}},
+            0,
+            {"x": {"status": "selected", "number": 1, "id": "1", "quota": "General"}},
+            "2026-11-03",
+        )
+        self.assertEqual(data["counts"]["selected"], 1)
+        self.assertEqual(data["counts"]["two_regionals"], 0)
+        self.assertEqual(data["counts"]["waiting_only"], 0)
+        self.assertEqual(data["counts"]["chennai"], 0)
+        self.assertEqual(data["counts"]["chennai_waiting"], 1)
 
     def test_stops_when_a_selected_team_is_not_in_the_pool(self):
         with self.assertRaises(bd.DataError):

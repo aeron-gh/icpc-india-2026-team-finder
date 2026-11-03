@@ -4,7 +4,8 @@
 export const PROBLEMS = ["PHNCHRG", "IC26CS", "IC26MP", "IC26CB", "IC26SH", "IC26LR", "IC26TM", "IC26AM", "IC26MM", "IC26BM"];
 
 const selectedAtKanpur = (team) => team.kanpur?.status === "selected";
-const selectedCount = (team) => Boolean(team.amritapuri) + Boolean(team.chennai) + selectedAtKanpur(team);
+const selectedAtChennai = (team) => team.chennai?.status === "selected";
+const selectedCount = (team) => Boolean(team.amritapuri) + selectedAtChennai(team) + selectedAtKanpur(team);
 const chennaiIs = (category) => (team) => team.chennai?.category === category;
 const kanpurQuotaIs = (quota) => (team) => selectedAtKanpur(team) && team.kanpur.quota === quota;
 const centreIs = (centre) => (team) => team.amritapuri?.centre === centre;
@@ -25,6 +26,7 @@ export const SHOW_GROUPS = [
       { id: "chennai-overall", label: "Chennai: overall toppers", test: chennaiIs("Overall topper") },
       { id: "chennai-inst", label: "Chennai: institutional toppers", test: chennaiIs("Institutional topper") },
       { id: "chennai-women", label: "Chennai: all women", test: chennaiIs("All women") },
+      { id: "chennai-waiting", label: "Chennai: waiting list", test: (team) => team.chennai?.status === "waiting" },
     ],
   },
   {
@@ -131,7 +133,10 @@ export function regionalStatus(team, regional) {
     return team.amritapuri ? { kind: "selected", text: team.amritapuri.centre } : none;
   }
   if (regional === "chennai") {
-    return team.chennai ? { kind: "selected", text: team.chennai.category } : none;
+    if (!team.chennai) return none;
+    return team.chennai.status === "waiting"
+      ? { kind: "waiting", text: `Waiting list #${team.chennai.number}` }
+      : { kind: "selected", text: team.chennai.category };
   }
   if (!team.kanpur) return none;
   return team.kanpur.status === "waiting"

@@ -41,7 +41,8 @@ const externalLink = (text, href, props = {}) => el("a", { href, target: "_blank
 function teamCountLine(regional, counts) {
   if (regional.key === "chennai") {
     const open = counts.chennai_open_women;
-    return `${number(counts.chennai)} teams selected${open ? `, ${open} women's slots still open` : ""}`;
+    const waiting = `, ${counts.chennai_waiting} on the waiting list`;
+    return `${number(counts.chennai)} teams selected${waiting}${open ? `, ${open} women's slots still open` : ""}`;
   }
   if (regional.key === "kanpur") {
     return `${number(counts.kanpur)} teams selected, ${counts.kanpur_waiting} on the waiting list`;

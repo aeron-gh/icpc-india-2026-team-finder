@@ -13,19 +13,15 @@ export const REGIONALS = [
     list: "https://icpcchennai.vercel.app/contest-info/official-ranklist",
     deadlines: [
       {
-        label: "Rank issue form closes",
-        when: "3 Nov, 7 PM",
-        iso: "2026-11-03T19:00:00+05:30",
+        label: "Selection issue form closes",
+        when: "3 Nov, 3 PM",
+        iso: "2026-11-03T15:00:00+05:30",
         url: "https://forms.gle/CEM9VRWYhjL8RCD77",
       },
-      {
-        label: "Women's team claim closes",
-        when: "4 Nov, 8 PM",
-        iso: "2026-11-04T20:00:00+05:30",
-        url: "https://forms.gle/GJLyYsAkXxPMRUak9",
-      },
+      { label: "Final list due by", when: "3 Nov, 8 PM", iso: "2026-11-03T20:00:00+05:30" },
       { label: "Onsite confirmation closes", when: "18 Nov", iso: "2026-11-18T23:59:00+05:30" },
     ],
+    note: "This list is tentative until the final list is out. All-women teams will be announced separately.",
   },
   {
     key: "kanpur",

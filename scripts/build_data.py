@@ -18,6 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / ".cache"
 OUTPUT = ROOT / "public" / "data.json"
+CHENNAI_SITE = "https://icpcchennai.vercel.app"
 
 SOURCES = {
     "pool": "https://indiaicpc.in/selection_pool_2026.html",
@@ -36,11 +37,14 @@ SHORT_NAMES = [
 
 CHENNAI_CATEGORIES = {
     "Overall Topper": "Overall topper",
+    "Institutional Topper": "Institutional topper",
     "Institutional Toppers": "Institutional topper",
     "ALL Women Team": "All women",
 }
 
 REGIONAL_NAME = re.compile(r"(Amritapuri|Chennai|Kanpur|Mathura) (\d{6,8}): ")
+CHENNAI_CODE_PATH = re.compile(r"/_next/static/chunks/app/contest-info/official-ranklist/page-[a-z0-9]+\.js")
+CHENNAI_WAITLIST_ROW = re.compile(r'\{sno:(\d+),category:"Waitlist",.*?username:"(icpcol\d+)"')
 
 
 class DataError(Exception):
@@ -184,8 +188,34 @@ def parse_chennai(html):
             raise DataError(f"Chennai team {row['Team Name']} has no username.")
         if row["Category"] not in CHENNAI_CATEGORIES:
             raise DataError(f"Chennai has a new category: {row['Category']}")
-        teams[row["Username"]] = {"category": CHENNAI_CATEGORIES[row["Category"]]}
+        teams[row["Username"]] = {"status": "selected", "category": CHENNAI_CATEGORIES[row["Category"]]}
     return teams, open_slots
+
+
+def chennai_code_path(html):
+    match = CHENNAI_CODE_PATH.search(html)
+    if not match:
+        raise DataError("The Chennai page no longer points to the code file that holds its waiting list.")
+    return match.group(0)
+
+
+def parse_chennai_waitlist(html, code):
+    """Chennai keeps its waiting list inside the page's code, not in a table.
+    Read it as plain text with a pattern. The downloaded code is never run."""
+    match = re.search(r"(\d+)\s+Waitlisted Teams", re.sub(r"<[^>]+>", " ", html))
+    if not match:
+        raise DataError("The Chennai page no longer says how many teams are waitlisted.")
+    teams = {user: {"status": "waiting", "number": int(number)} for number, user in CHENNAI_WAITLIST_ROW.findall(code)}
+    if len(teams) != int(match.group(1)):
+        raise DataError(f"The Chennai page says {match.group(1)} waitlisted teams but has {len(teams)}.")
+    return teams
+
+
+def combine_chennai(selected, waitlist):
+    both = set(selected) & set(waitlist)
+    if both:
+        raise DataError(f"Chennai lists teams as both selected and waitlisted: {sorted(both)[:5]}")
+    return {**selected, **waitlist}
 
 
 def parse_amritapuri(text):
@@ -245,7 +275,7 @@ def build_dataset(teams, amritapuri, chennai, chennai_open_women, kanpur, checke
             raise DataError(f"{label} lists teams that are not in the pool: {sorted(unknown)[:5]}")
 
     merged = []
-    counts = {"selected": 0, "two_regionals": 0, "kanpur_waiting_only": 0, "not_listed": 0}
+    counts = {"selected": 0, "two_regionals": 0, "waiting_only": 0, "not_listed": 0}
     for team in teams:
         team = dict(team)
         user = team["user"]
@@ -257,19 +287,25 @@ def build_dataset(teams, amritapuri, chennai, chennai_open_women, kanpur, checke
             team["kanpur"] = kanpur[user]
         merged.append(team)
 
-        selected_at = (user in amritapuri) + (user in chennai) + (kanpur.get(user, {}).get("status") == "selected")
+        selected_at = (
+            (user in amritapuri)
+            + (chennai.get(user, {}).get("status") == "selected")
+            + (kanpur.get(user, {}).get("status") == "selected")
+        )
         if selected_at:
             counts["selected"] += 1
         if selected_at == 2:
             counts["two_regionals"] += 1
         if not selected_at:
-            counts["kanpur_waiting_only" if user in kanpur else "not_listed"] += 1
+            counts["waiting_only" if user in kanpur or user in chennai else "not_listed"] += 1
 
     statuses = [entry["status"] for entry in kanpur.values()]
+    chennai_statuses = [entry["status"] for entry in chennai.values()]
     counts.update(
         pool=len(teams),
         amritapuri=len(amritapuri),
-        chennai=len(chennai),
+        chennai=chennai_statuses.count("selected"),
+        chennai_waiting=chennai_statuses.count("waiting"),
         chennai_open_women=chennai_open_women,
         kanpur=statuses.count("selected"),
         kanpur_waiting=statuses.count("waiting"),
@@ -281,12 +317,18 @@ def _page_path(name):
     return CACHE / name / "page"
 
 
+def _download(name, url):
+    path = _page_path(name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"Downloading {name}...")
+    subprocess.run(["curl", "-sS", "--fail", "--max-time", "60", url, "-o", str(path)], check=True)
+
+
 def download_all():
     for name, url in SOURCES.items():
-        path = _page_path(name)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        print(f"Downloading {name}...")
-        subprocess.run(["curl", "-sS", "--fail", "--max-time", "60", url, "-o", str(path)], check=True)
+        _download(name, url)
+    code_path = chennai_code_path(_page_path("chennai").read_text(encoding="utf-8"))
+    _download("chennai_code", CHENNAI_SITE + code_path)
 
 
 def main(argv):
@@ -295,7 +337,8 @@ def main(argv):
     read = lambda name: _page_path(name).read_text(encoding="utf-8")
 
     pool = parse_pool(read("pool"))
-    chennai, open_slots = parse_chennai(read("chennai"))
+    chennai_selected, open_slots = parse_chennai(read("chennai"))
+    chennai = combine_chennai(chennai_selected, parse_chennai_waitlist(read("chennai"), read("chennai_code")))
     amritapuri = parse_amritapuri(read("amritapuri"))
     kanpur = link_kanpur(parse_kanpur(read("kanpur")), pool)
     today = datetime.now(timezone(timedelta(hours=5, minutes=30))).date().isoformat()

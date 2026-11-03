@@ -24,7 +24,7 @@ const threeOfAKind = {
   solved: 8,
   problems: "1111111100",
   amritapuri: { centre: "Amritapuri", rank: 1 },
-  chennai: { category: "Overall topper" },
+  chennai: { status: "selected", category: "Overall topper" },
 };
 const hogabhai = {
   ...base,
@@ -33,7 +33,7 @@ const hogabhai = {
   name: "Hogabhai",
   college: "Amrita Vishwa Vidyapeetham, Amritapuri",
   short: "Amrita Vishwa Vidyapeetham, Amritapuri",
-  chennai: { category: "Institutional topper" },
+  chennai: { status: "selected", category: "Institutional topper" },
   kanpur: { status: "selected", number: 6, id: "1151874", quota: "General" },
 };
 const criticalPath = {
@@ -43,7 +43,7 @@ const criticalPath = {
   name: "Critical_Path",
   college: "Indian Institute of Technology - Kharagpur",
   short: "IIT Kharagpur",
-  chennai: { category: "Overall topper" },
+  chennai: { status: "selected", category: "Overall topper" },
   kanpur: { status: "waiting", number: 1, id: "1156460", quota: "General" },
 };
 const phiChance = {
@@ -176,6 +176,31 @@ test("no ticked regionals means no regional limit, whichever rule is set", () =>
 test("ticked regionals combine with the Show filter", () => {
   assert.deepEqual(users(filterTeams(teams, { regionals: ["kanpur"], show: "chennai-inst" })), ["Hogabhai"]);
   assert.deepEqual(users(filterTeams(teams, { regionals: ["amritapuri"], show: "chennai-inst" })), []);
+});
+
+test("a Chennai waiting list team is never counted as selected", () => {
+  const hit = {
+    ...base,
+    rank: 1383,
+    user: "icpcol262384",
+    name: "HIT",
+    college: "National Institute of Technology, Calicut",
+    short: "NIT Calicut",
+    chennai: { status: "waiting", number: 1 },
+  };
+  const list = prepareTeams([hit]);
+  assert.deepEqual(regionalStatus(hit, "chennai"), { kind: "waiting", text: "Waiting list #1" });
+  assert.deepEqual(users(filterTeams(list, { show: "chennai-waiting" })), ["HIT"]);
+  for (const filters of [{ show: "selected" }, { show: "chennai-overall" }, { show: "chennai-inst" }, { show: "none" }, { regionals: ["chennai"] }]) {
+    assert.deepEqual(users(filterTeams(list, filters)), [], JSON.stringify(filters));
+  }
+});
+
+test("a waiting list place does not make a second regional", () => {
+  const both = prepareTeams([{ ...bumblebee, chennai: { status: "waiting", number: 2 } }]);
+  assert.deepEqual(users(filterTeams(both, { show: "two" })), []);
+  assert.deepEqual(users(filterTeams(both, { show: "selected" })), ["bumblebee"]);
+  assert.deepEqual(users(filterTeams(both, { regionals: ["chennai", "kanpur"], match: "all" })), []);
 });
 
 test("college options are unique and sorted by the name shown", () => {
