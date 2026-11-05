@@ -20,6 +20,9 @@ const all = data.teams;
 const atChennai = (t) => t.chennai?.status === "selected";
 const atKanpur = (t) => t.kanpur?.status === "selected";
 const atAmritapuri = (t) => Boolean(t.amritapuri);
+const atMathura = (t) => t.mathura?.status === "selected";
+const AT = { chennai: atChennai, kanpur: atKanpur, mathura: atMathura, amritapuri: atAmritapuri };
+const published = REGIONALS.filter((r) => r.published);
 const howMany = (test) => all.filter(test).length;
 const india = (n) => n.toLocaleString("en-IN");
 const teamsText = (n) => (n === 1 ? "1 team" : `${india(n)} teams`);
@@ -133,12 +136,18 @@ const check = (name, got, want) => {
 /* First load */
 await size(1280, 900);
 await open();
-const selected = howMany((t) => atChennai(t) || atKanpur(t) || atAmritapuri(t));
+const selected = howMany((t) => published.some((r) => AT[r.key](t)));
 const pages = Math.ceil(all.length / 100);
 check("first load", await result(), `Showing 1–100 of ${india(all.length)} teams`);
 check("100 rows", await js(`document.querySelectorAll("#rows .team-row").length`), 100);
 check("page count", await js(`document.getElementById("page").textContent`), `Page 1 of ${pages}`);
 check("summary", (await js(`document.getElementById("summary").textContent`)).startsWith(`${india(all.length)} teams are in the final pool. ${india(selected)} are selected`), true);
+check("one column per published regional", await js(`[...document.querySelectorAll("#head th")].map((t) => t.textContent)`), ["Rank", "Team", "Solved", "Time", "Penalty", ...published.map((r) => r.name), "Details"]);
+for (const [key, missing] of Object.entries(data.not_in_pool ?? {})) {
+  const name = REGIONALS.find((r) => r.key === key).name;
+  const note = `The official list also has ${missing === 1 ? "1 more team that is" : `${missing} more teams that are`} no longer in the final pool.`;
+  check(`${name} card explains teams left out`, await js(`[...document.querySelectorAll(".regional")].find((c) => c.querySelector("h2").textContent === ${JSON.stringify(name)}).textContent.includes(${JSON.stringify(note)})`), missing > 0);
+}
 check("font", await js(`document.fonts.check('15px "Atkinson Hyperlegible Next"')`), true);
 const REPO = "https://github.com/aeron-gh/icpc-india-2026-team-finder";
 check("repo buttons", await js(`[...document.querySelectorAll(".repo-link")].map((a) => [a.textContent.trim(), a.href, a.target, a.rel])`), [["View on GitHub", REPO, "_blank", "noopener"], ["Star on GitHub", REPO, "_blank", "noopener"]]);
@@ -147,12 +156,18 @@ check("first team", await js(`document.querySelector("#rows .team-name").textCon
 check("solved dots are links", await js(`document.querySelector("#rows .team-row").querySelectorAll("a.dot").length`), first.solved);
 check("first dot url", await js(`document.querySelector("#rows a.dot").href`), `https://www.codechef.com/ICPCOL2026/status/PHNCHRG?usernames=${first.user}`);
 await shot("laptop-top");
+const tickStaysWithWord = () => js(`[...document.querySelectorAll("#rows .status-selected")].every((cell) => { const r = document.createRange(); r.setStart(cell.firstChild, 0); r.setEnd(cell.firstChild, 3); return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size === 1; })`);
+check("tick stays on the same line as its word", await tickStaysWithWord(), true);
+await size(1024, 800);
+check("1024px laptop: no sideways scroll", await js(`document.documentElement.scrollWidth <= innerWidth`), true);
+check("1024px laptop: tick stays with its word", await tickStaysWithWord(), true);
+await size(1280, 900);
 
 /* Show filter */
-const hasStatus = (t) => t.amritapuri || t.chennai || t.kanpur;
+const hasStatus = (t) => t.amritapuri || t.chennai || t.kanpur || t.mathura;
 const showCases = [
-  ["selected", (t) => atChennai(t) || atKanpur(t) || atAmritapuri(t)],
-  ["two", (t) => atChennai(t) + atKanpur(t) + atAmritapuri(t) === 2],
+  ["selected", (t) => atChennai(t) || atKanpur(t) || atMathura(t) || atAmritapuri(t)],
+  ["two", (t) => atChennai(t) + atKanpur(t) + atMathura(t) + atAmritapuri(t) === 2],
   ["none", (t) => !hasStatus(t)],
   ["chennai-overall", (t) => t.chennai?.category === "Overall topper"],
   ["chennai-inst", (t) => t.chennai?.category === "Institutional topper"],
@@ -160,6 +175,8 @@ const showCases = [
   ["kanpur-waiting", (t) => t.kanpur?.status === "waiting"],
   ["kanpur-women", (t) => atKanpur(t) && t.kanpur.quota === "All Women"],
   ["kanpur-tentative", (t) => atKanpur(t) && t.kanpur.quota === "General (Tentative)"],
+  ["mathura-waiting", (t) => t.mathura?.status === "waiting"],
+  ["mathura-women", (t) => atMathura(t) && t.mathura.quota === "All Women"],
   ["amritapuri-Amritapuri", (t) => t.amritapuri?.centre === "Amritapuri"],
   ["amritapuri-Bengaluru", (t) => t.amritapuri?.centre === "Bengaluru"],
   ["amritapuri-Coimbatore", (t) => t.amritapuri?.centre === "Coimbatore"],
@@ -185,6 +202,15 @@ if (chennaiWaiter) {
   check("Chennai waiting team is hidden by the Chennai checkbox", await result(), "0 teams");
   await clear();
 }
+const mathuraWaiter = all.find((t) => t.mathura?.status === "waiting" && !t.kanpur && !t.chennai);
+if (mathuraWaiter) {
+  await type(mathuraWaiter.user);
+  const column = published.findIndex((r) => r.key === "mathura");
+  check("Mathura waiting team shows waiting", await js(`document.querySelectorAll("#rows .status-cell")[${column}].textContent`), `Waiting list #${mathuraWaiter.mathura.number}`);
+  await tick("mathura");
+  check("Mathura waiting team is hidden by the Mathura checkbox", await result(), "0 teams");
+  await clear();
+}
 const kanpurWaiter = all.find((t) => t.kanpur?.status === "waiting");
 await type(kanpurWaiter.user);
 await tick("kanpur");
@@ -192,15 +218,11 @@ check("Kanpur waiting team is hidden by the Kanpur checkbox", await result(), "0
 await clear();
 
 /* Regional checkboxes */
-const pairs = [
-  [["chennai", "kanpur"], [atChennai, atKanpur]],
-  [["kanpur", "amritapuri"], [atKanpur, atAmritapuri]],
-  [["chennai", "amritapuri"], [atChennai, atAmritapuri]],
-];
-check("checkbox labels", await js(`[...document.querySelectorAll("#regionalChecks label")].map((l) => l.textContent)`), [
-  `Chennai (${india(howMany(atChennai))})`, `Kanpur (${india(howMany(atKanpur))})`, "Mathura (not out)", `Amritapuri (${india(howMany(atAmritapuri))})`,
-]);
-check("Mathura is greyed out", await js(`document.querySelector('#regionalChecks input[value="mathura"]').disabled`), true);
+const pairs = [];
+for (const [i, a] of published.entries()) for (const b of published.slice(i + 1)) pairs.push([[a.key, b.key], [AT[a.key], AT[b.key]]]);
+check("checkbox labels", await js(`[...document.querySelectorAll("#regionalChecks label")].map((l) => l.textContent)`),
+  REGIONALS.map((r) => (r.published ? `${r.name} (${india(howMany(AT[r.key]))})` : `${r.name} (not out)`)));
+check("only unpublished regionals are greyed out", await js(`[...document.querySelectorAll("#regionalChecks input")].map((i) => i.disabled)`), REGIONALS.map((r) => !r.published));
 check("rule hidden at first", await ruleHidden(), true);
 for (const [[a, b], [testA, testB]] of pairs) {
   const any = howMany((t) => testA(t) || testB(t));

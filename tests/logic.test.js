@@ -203,6 +203,35 @@ test("a waiting list place does not make a second regional", () => {
   assert.deepEqual(users(filterTeams(both, { regionals: ["chennai", "kanpur"], match: "all" })), []);
 });
 
+test("Mathura shows selected with its quota and waiting with its number", () => {
+  const nit = { ...base, short: "NIT Kurukshetra", college: "National Institute of Technology, Kurukshetra" };
+  const picked = { ...nit, rank: 641, user: "icpcol263588", name: "Powerpuff girls", mathura: { status: "selected", number: 80, id: "1153256", quota: "General" } };
+  const women = { ...nit, rank: 700, user: "w1", name: "Women Team", mathura: { status: "selected", number: 5, id: "1160001", quota: "All Women" } };
+  const waiter = { ...nit, rank: 1480, user: "w2", name: "Debug Divas", mathura: { status: "waiting", number: 11, id: "1152821", quota: "All Women" } };
+  const list = prepareTeams([picked, women, waiter, phiChance]);
+
+  assert.deepEqual(regionalStatus(picked, "mathura"), { kind: "selected", text: "General" });
+  assert.deepEqual(regionalStatus(women, "mathura"), { kind: "selected", text: "All Women" });
+  assert.deepEqual(regionalStatus(waiter, "mathura"), { kind: "waiting", text: "Waiting list #11" });
+  assert.deepEqual(regionalStatus(phiChance, "mathura"), { kind: "none", text: "" });
+
+  const cases = [
+    [{ show: "mathura-waiting" }, ["Debug Divas"]],
+    [{ show: "mathura-women" }, ["Women Team"]],
+    [{ show: "selected" }, ["Powerpuff girls", "Women Team"]],
+    [{ show: "none" }, ["Phi Chance"]],
+    [{ regionals: ["mathura"] }, ["Powerpuff girls", "Women Team"]],
+    [{ query: "1153256" }, ["Powerpuff girls"]],
+  ];
+  for (const [filters, want] of cases) assert.deepEqual(users(filterTeams(list, filters)), want, JSON.stringify(filters));
+});
+
+test("selected at Mathura and Kanpur counts as two regionals", () => {
+  const both = prepareTeams([{ ...bumblebee, mathura: { status: "selected", number: 3, id: "1", quota: "General" } }]);
+  assert.deepEqual(users(filterTeams(both, { show: "two" })), ["bumblebee"]);
+  assert.deepEqual(users(filterTeams(both, { regionals: ["kanpur", "mathura"], match: "all" })), ["bumblebee"]);
+});
+
 test("college options are unique and sorted by the name shown", () => {
   const options = collegeOptions(prepareTeams([phiChance, bumblebee, { ...phiChance, user: "x" }]));
   assert.deepEqual(options, [

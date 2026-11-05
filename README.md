@@ -9,11 +9,14 @@ It is a plain static site. The page is in `public/` and needs no build step.
 ```
 npm run data
 npm test
+npm run check
 ```
 
 `npm run data` downloads the official lists and rewrites `public/data.json`. If a list looks wrong, it stops with an error and leaves the old file alone. Commit and push the new file to publish it.
 
-The script also tells you when the Mathura page changes. Its list then needs to be added to `scripts/build_data.py`.
+A team can stay on a regional list after it leaves the final pool. The script leaves such teams out, prints a note, and the page only shows how many there are.
+
+`npm run check` opens the page in headless Chromium and uses it like a student would.
 
 ## Update dates and deadlines
 
@@ -32,4 +35,5 @@ Then open http://localhost:8000.
 - [Final selection pool](https://indiaicpc.in/selection_pool_2026.html)
 - [Chennai list](https://icpcchennai.vercel.app/contest-info/official-ranklist)
 - [Kanpur list](https://kanpur.indiaicpc.in/onsite2026.html)
+- [Mathura list](https://mathuraicpc.in/onsite-teams)
 - [Amritapuri list](https://amritaicpc.in/selected-amritapuri)

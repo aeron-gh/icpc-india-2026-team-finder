@@ -44,8 +44,8 @@ function teamCountLine(regional, counts) {
     const waiting = `, ${counts.chennai_waiting} on the waiting list`;
     return `${number(counts.chennai)} teams selected${waiting}${open ? `, ${open} women's slots still open` : ""}`;
   }
-  if (regional.key === "kanpur") {
-    return `${number(counts.kanpur)} teams selected, ${counts.kanpur_waiting} on the waiting list`;
+  if (regional.key === "kanpur" || regional.key === "mathura") {
+    return `${number(counts[regional.key])} teams selected, ${counts[`${regional.key}_waiting`]} on the waiting list`;
   }
   if (regional.key === "amritapuri") return `${number(counts.amritapuri)} teams selected`;
   return "List not published yet";
@@ -57,7 +57,14 @@ function deadlineItem(deadline, now) {
   return el("li", { className: closed ? "closed" : "" }, title, closed ? `${deadline.when} (closed)` : deadline.when);
 }
 
-function regionalColumn(regional, counts, now) {
+function notInPoolLine(regional, notInPool) {
+  const missing = notInPool?.[regional.key] ?? 0;
+  if (!missing) return "";
+  const teams = missing === 1 ? "1 more team that is" : `${missing} more teams that are`;
+  return el("p", { className: "quiet" }, `The official list also has ${teams} no longer in the final pool.`);
+}
+
+function regionalColumn(regional, counts, notInPool, now) {
   const links = [externalLink("Official site", regional.site)];
   if (regional.list) links.push(externalLink("Official list", regional.list));
   return el(
@@ -68,6 +75,7 @@ function regionalColumn(regional, counts, now) {
     el("p", { className: "quiet" }, regional.where),
     el("p", { className: "quiet" }, regional.fee),
     el("p", { className: "count" }, teamCountLine(regional, counts)),
+    notInPoolLine(regional, notInPool),
     regional.deadlines.length ? el("ul", {}, ...regional.deadlines.map((deadline) => deadlineItem(deadline, now))) : "",
     regional.warning ? el("p", { className: "warning" }, regional.warning) : "",
     regional.note ? el("p", { className: "quiet" }, regional.note) : "",
@@ -75,10 +83,13 @@ function regionalColumn(regional, counts, now) {
   );
 }
 
-function renderTop({ counts, checked }, now) {
+function renderTop({ counts, checked, not_in_pool: notInPool }, now) {
+  const waitingFor = REGIONALS.filter((regional) => !regional.published).map((regional) => regional.name);
   byId("summary").textContent =
     `${number(counts.pool)} teams are in the final pool. ${number(counts.selected)} are selected so far across ` +
-    "Chennai, Kanpur and Amritapuri. Mathura's list isn't out yet.";
+    (waitingFor.length
+      ? `${LISTS_OUT.map((regional) => regional.name).join(", ")}. Still to come: ${waitingFor.join(", ")}.`
+      : "all four regionals.");
 
   const day = new Date(`${checked}T12:00:00+05:30`).toLocaleDateString("en-IN", {
     day: "numeric",
@@ -95,7 +106,7 @@ function renderTop({ counts, checked }, now) {
     byId("next").hidden = false;
   }
 
-  byId("regionals").replaceChildren(...REGIONALS.map((regional) => regionalColumn(regional, counts, now)));
+  byId("regionals").replaceChildren(...REGIONALS.map((regional) => regionalColumn(regional, counts, notInPool, now)));
   byId("links").replaceChildren(...LINKS.map((link) => el("li", {}, externalLink(link.label, link.url))));
 
   const small = matchMedia("(max-width: 980px)");
@@ -217,7 +228,8 @@ function dots(team) {
 function statusCell(team, regional) {
   const status = regionalStatus(team, regional.key);
   const className = `status-cell label-cell status-${status.kind}`;
-  const text = status.kind === "selected" ? `✓ ${status.text}` : status.text || "–";
+  // A non-breaking space keeps the tick on the same line as its first word.
+  const text = status.kind === "selected" ? `✓ ${status.text}` : status.text || "–";
   return el("td", { className, "data-label": `${regional.name}:` }, text);
 }
 
@@ -229,8 +241,12 @@ function detailRow(team) {
   for (const entry of team.names ?? []) {
     entries.push([`${entry.regional} name`, `${entry.name} (Team ID ${entry.id})`]);
   }
-  if (team.kanpur && !team.names?.some((entry) => entry.id === team.kanpur.id)) {
-    entries.push(["Kanpur Team ID", team.kanpur.id]);
+  for (const regional of ["kanpur", "mathura"]) {
+    const entry = team[regional];
+    if (entry && !team.names?.some((name) => name.id === entry.id)) {
+      const label = REGIONALS.find((item) => item.key === regional).name;
+      entries.push([`${label} Team ID`, entry.id]);
+    }
   }
   if (team.amritapuri) entries.push(["Amritapuri list", `Rank ${team.amritapuri.rank}`]);
 

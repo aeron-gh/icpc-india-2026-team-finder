@@ -5,7 +5,9 @@ export const PROBLEMS = ["PHNCHRG", "IC26CS", "IC26MP", "IC26CB", "IC26SH", "IC2
 
 const selectedAtKanpur = (team) => team.kanpur?.status === "selected";
 const selectedAtChennai = (team) => team.chennai?.status === "selected";
-const selectedCount = (team) => Boolean(team.amritapuri) + selectedAtChennai(team) + selectedAtKanpur(team);
+const selectedAtMathura = (team) => team.mathura?.status === "selected";
+const selectedCount = (team) =>
+  Boolean(team.amritapuri) + selectedAtChennai(team) + selectedAtKanpur(team) + selectedAtMathura(team);
 const chennaiIs = (category) => (team) => team.chennai?.category === category;
 const kanpurQuotaIs = (quota) => (team) => selectedAtKanpur(team) && team.kanpur.quota === quota;
 const centreIs = (centre) => (team) => team.amritapuri?.centre === centre;
@@ -17,7 +19,11 @@ export const SHOW_GROUPS = [
       { id: "all", label: "All teams", test: () => true },
       { id: "selected", label: "Selected at any regional", test: (team) => selectedCount(team) > 0 },
       { id: "two", label: "Selected at two regionals", test: (team) => selectedCount(team) === 2 },
-      { id: "none", label: "Not on any list yet", test: (team) => !team.amritapuri && !team.chennai && !team.kanpur },
+      {
+        id: "none",
+        label: "Not on any list yet",
+        test: (team) => !team.amritapuri && !team.chennai && !team.kanpur && !team.mathura,
+      },
     ],
   },
   {
@@ -35,6 +41,13 @@ export const SHOW_GROUPS = [
       { id: "kanpur-waiting", label: "Kanpur: waiting list", test: (team) => team.kanpur?.status === "waiting" },
       { id: "kanpur-women", label: "Kanpur: all women", test: kanpurQuotaIs("All Women") },
       { id: "kanpur-tentative", label: "Kanpur: tentative", test: kanpurQuotaIs("General (Tentative)") },
+    ],
+  },
+  {
+    label: "Mathura",
+    options: [
+      { id: "mathura-waiting", label: "Mathura: waiting list", test: (team) => team.mathura?.status === "waiting" },
+      { id: "mathura-women", label: "Mathura: all women", test: (team) => selectedAtMathura(team) && team.mathura.quota === "All Women" },
     ],
   },
   {
@@ -63,6 +76,7 @@ export function prepareTeams(teams) {
       team.college,
       team.short,
       team.kanpur?.id ?? "",
+      team.mathura?.id ?? "",
     ]
       .join(" ")
       .toLowerCase(),
@@ -138,10 +152,11 @@ export function regionalStatus(team, regional) {
       ? { kind: "waiting", text: `Waiting list #${team.chennai.number}` }
       : { kind: "selected", text: team.chennai.category };
   }
-  if (!team.kanpur) return none;
-  return team.kanpur.status === "waiting"
-    ? { kind: "waiting", text: `Waiting list #${team.kanpur.number}` }
-    : { kind: "selected", text: team.kanpur.quota };
+  const entry = team[regional];
+  if (!entry) return none;
+  return entry.status === "waiting"
+    ? { kind: "waiting", text: `Waiting list #${entry.number}` }
+    : { kind: "selected", text: entry.quota };
 }
 
 export function isClosed(iso, now) {

@@ -21,7 +21,7 @@ export const REGIONALS = [
       { label: "Final list due by", when: "3 Nov, 8 PM", iso: "2026-11-03T20:00:00+05:30" },
       { label: "Onsite confirmation closes", when: "18 Nov", iso: "2026-11-18T23:59:00+05:30" },
     ],
-    note: "This list is tentative until the final list is out. All-women teams will be announced separately.",
+    note: "The official page still marks this list as tentative.",
   },
   {
     key: "kanpur",
@@ -33,7 +33,7 @@ export const REGIONALS = [
     site: "https://kanpur.indiaicpc.in/",
     list: "https://kanpur.indiaicpc.in/onsite2026.html",
     deadlines: [
-      { label: "Selected teams get an email by", when: "3 Nov, 10 PM", iso: "2026-11-03T22:00:00+05:30" },
+      { label: "Selected teams get an email by", when: "5 Nov, 10 PM", iso: "2026-11-05T22:00:00+05:30" },
       { label: "Fee and onsite form due", when: "12 Nov, 5 PM", iso: "2026-11-12T17:00:00+05:30" },
     ],
     warning: "Miss this and your slot goes to the waiting list.",
@@ -41,12 +41,17 @@ export const REGIONALS = [
   {
     key: "mathura",
     name: "Mathura",
-    published: false,
+    published: true,
     dates: "27–28 Dec 2026",
-    where: "GLA University",
+    where: "GLA University, Mathura",
     fee: "Onsite fee: ₹4,500 per team",
     site: "https://mathuraicpc.in/",
-    deadlines: [],
+    list: "https://mathuraicpc.in/onsite-teams",
+    deadlines: [
+      { label: "Selected teams get an email by", when: "5 Nov, 10 PM", iso: "2026-11-05T22:00:00+05:30" },
+      { label: "Fee and onsite form due", when: "16 Nov, 5 PM", iso: "2026-11-16T17:00:00+05:30" },
+    ],
+    warning: "Miss this and your slot goes to the waiting list.",
   },
   {
     key: "amritapuri",
