@@ -10,6 +10,7 @@ import {
   isClosed,
   nextDeadline,
   number,
+  onAnyList,
   paginate,
   prepareTeams,
   regionalStatus,
@@ -289,7 +290,7 @@ function teamRow(team) {
     ...LISTS_OUT.map((regional) => statusCell(team, regional)),
     el("td", { className: "more-cell" }, open),
   );
-  if (!team.amritapuri && !team.chennai && !team.kanpur) {
+  if (!onAnyList(team)) {
     row.insertBefore(el("td", { className: "none-note" }, "Not on a published list yet"), row.lastChild);
   }
   open.addEventListener("click", () => {

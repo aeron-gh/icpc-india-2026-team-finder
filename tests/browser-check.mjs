@@ -165,6 +165,7 @@ await size(1280, 900);
 
 /* Show filter */
 const hasStatus = (t) => t.amritapuri || t.chennai || t.kanpur || t.mathura;
+const mathuraOnly = all.find((t) => atMathura(t) && !t.amritapuri && !t.chennai && !t.kanpur);
 const showCases = [
   ["selected", (t) => atChennai(t) || atKanpur(t) || atMathura(t) || atAmritapuri(t)],
   ["two", (t) => atChennai(t) + atKanpur(t) + atMathura(t) + atAmritapuri(t) === 2],
@@ -322,6 +323,12 @@ for (const width of [375, 320]) {
   await tick("amritapuri");
   check(`${width}px no sideways scroll with the rule showing`, await noSideways(), true);
   check(`${width}px checkboxes are easy to tap`, await js(`[...document.querySelectorAll("#regionalChecks label, #matchRule label")].every((l) => l.getBoundingClientRect().height >= 40)`), true);
+  await clear();
+  await type(mathuraOnly.user);
+  check(`${width}px Mathura-only team has no "not on a list" note`, await js(`document.querySelector("#rows .none-note") === null`), true);
+  const unlisted = all.find((t) => !hasStatus(t));
+  await type(unlisted.user);
+  check(`${width}px team on no list says so`, await js(`document.querySelector("#rows .none-note")?.textContent`), "Not on a published list yet");
   await clear();
   const waiter = chennaiWaiter ?? kanpurWaiter;
   await type(waiter.user);

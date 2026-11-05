@@ -12,6 +12,9 @@ const chennaiIs = (category) => (team) => team.chennai?.category === category;
 const kanpurQuotaIs = (quota) => (team) => selectedAtKanpur(team) && team.kanpur.quota === quota;
 const centreIs = (centre) => (team) => team.amritapuri?.centre === centre;
 
+// On any regional list at all, selected or waiting.
+export const onAnyList = (team) => Boolean(team.amritapuri || team.chennai || team.kanpur || team.mathura);
+
 export const SHOW_GROUPS = [
   {
     label: "All regionals",
@@ -19,11 +22,7 @@ export const SHOW_GROUPS = [
       { id: "all", label: "All teams", test: () => true },
       { id: "selected", label: "Selected at any regional", test: (team) => selectedCount(team) > 0 },
       { id: "two", label: "Selected at two regionals", test: (team) => selectedCount(team) === 2 },
-      {
-        id: "none",
-        label: "Not on any list yet",
-        test: (team) => !team.amritapuri && !team.chennai && !team.kanpur && !team.mathura,
-      },
+      { id: "none", label: "Not on any list yet", test: (team) => !onAnyList(team) },
     ],
   },
   {

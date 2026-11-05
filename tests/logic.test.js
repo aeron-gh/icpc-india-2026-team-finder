@@ -4,6 +4,7 @@ import {
   collegeOptions,
   filterTeams,
   nextDeadline,
+  onAnyList,
   paginate,
   prepareTeams,
   regionalStatus,
@@ -330,4 +331,13 @@ test("the next deadline is the earliest one not yet closed, across regionals", (
   });
   assert.equal(nextDeadline(regionals, new Date("2026-11-03T20:00:00+05:30")).label, "Email");
   assert.equal(nextDeadline(regionals, new Date("2026-12-01T00:00:00+05:30")), null);
+});
+
+test("a team on any one regional list, Mathura included, is on a list", () => {
+  const mathuraOnly = { ...phiChance, mathura: { status: "selected", number: 44, id: "1162526", quota: "General" } };
+  const mathuraWaiting = { ...phiChance, mathura: { status: "waiting", number: 3, id: "1162526", quota: "General" } };
+  assert.equal(onAnyList(mathuraOnly), true);
+  assert.equal(onAnyList(mathuraWaiting), true);
+  assert.equal(onAnyList(criticalPath), true);
+  assert.equal(onAnyList(phiChance), false);
 });
