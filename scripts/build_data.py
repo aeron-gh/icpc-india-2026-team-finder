@@ -19,6 +19,10 @@ ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / ".cache"
 OUTPUT = ROOT / "public" / "data.json"
 CHENNAI_SITE = "https://icpcchennai.vercel.app"
+MATHURA_SITE = "https://mathuraicpc.in"
+
+# Above this many teams missing from the pool, a list is probably broken, not just out of date.
+MAX_NOT_IN_POOL = 3
 
 SOURCES = {
     "pool": "https://indiaicpc.in/selection_pool_2026.html",
@@ -42,9 +46,24 @@ CHENNAI_CATEGORIES = {
     "ALL Women Team": "All women",
 }
 
+# Colleges that a regional list writes differently from the pool. Checked by hand on 5 Nov 2026.
+COLLEGE_ALIASES = {
+    "JSS Academy Of Technical Education": "JSS Academy of Technical Education, Noida",
+    "KL University H": "Koneru Lakshmaiah Education Foundation",
+    "Shri Ramdeobaba College of Engineering and Management, Nagpur": "Ramdeobaba University, Nagpur",
+}
+
+MATHURA_QUOTAS = {"General": "General", "Female": "All Women"}
+
 REGIONAL_NAME = re.compile(r"(Amritapuri|Chennai|Kanpur|Mathura) (\d{6,8}): ")
 CHENNAI_CODE_PATH = re.compile(r"/_next/static/chunks/app/contest-info/official-ranklist/page-[a-z0-9]+\.js")
 CHENNAI_WAITLIST_ROW = re.compile(r'\{sno:(\d+),category:"Waitlist",.*?username:"(icpcol\d+)"')
+MATHURA_CODE_PATH = re.compile(r"/assets/index-[A-Za-z0-9_-]+\.js")
+MATHURA_LIST = re.compile(r"([\w$]+)=\[(\{serialNo:.*?\})\]")
+MATHURA_ROW = re.compile(
+    r'\{serialNo:(\d+),teamName:"((?:[^"\\]|\\.)*)",institute:"((?:[^"\\]|\\.)*)",teamId:"(\d+)",quota:"(\w+)"\}'
+)
+MATHURA_SELECTED = re.compile(r'([\w$]+)\.filter\(\w+=>\w+\.quota==="General"\)')
 
 
 class DataError(Exception):
@@ -223,6 +242,55 @@ def parse_amritapuri(text):
     return {row["Username"]: {"centre": row["Site"], "rank": int(row["Rank"])} for row in reader}
 
 
+def mathura_code_path(html):
+    match = MATHURA_CODE_PATH.search(html)
+    if not match:
+        raise DataError("The Mathura page no longer points to the code file that holds its lists.")
+    return match.group(0)
+
+
+def _js_text(text):
+    try:
+        return json.loads(f'"{text}"')
+    except json.JSONDecodeError as error:
+        raise DataError(f"Mathura has text this script cannot read: {text[:40]}") from error
+
+
+def parse_mathura(code):
+    """Mathura keeps both lists inside the page's code, not in a table.
+    Read them as plain text with a pattern. The downloaded code is never run.
+    The selected list is the one the page counts by quota, so new short names don't matter."""
+    lists = dict(MATHURA_LIST.findall(code))
+    counted = set(MATHURA_SELECTED.findall(code))
+    if len(lists) != 2 or len(counted) != 1 or not counted <= set(lists):
+        raise DataError("The Mathura code no longer has one selected list and one waiting list.")
+    (selected,) = counted
+    (waiting,) = set(lists) - counted
+
+    rows = []
+    for status, name in (("selected", selected), ("waiting", waiting)):
+        body = lists[name]
+        found = MATHURA_ROW.findall(body)
+        if len(found) != body.count("serialNo:"):
+            raise DataError(f"Some Mathura {status} rows are written in a shape this script does not know.")
+        if [int(row[0]) for row in found] != list(range(1, len(found) + 1)):
+            raise DataError(f"The Mathura {status} list skips serial numbers.")
+        for number, team, college, team_id, quota in found:
+            if quota not in MATHURA_QUOTAS:
+                raise DataError(f"Mathura has a new quota: {quota}")
+            rows.append(
+                {
+                    "status": status,
+                    "number": int(number),
+                    "name": _js_text(team),
+                    "id": team_id,
+                    "college": _js_text(college),
+                    "quota": MATHURA_QUOTAS[quota],
+                }
+            )
+    return rows
+
+
 def parse_kanpur(html):
     tables = parse_tables(html)
     if len(tables) != 2 or tables[0][0][0] != "Sl No" or tables[1][0][0] != "Waiting List No.":
@@ -245,34 +313,45 @@ def parse_kanpur(html):
     return rows
 
 
-def link_kanpur(rows, pool):
-    """Kanpur has Team IDs but no usernames, so find each team in the pool:
-    by Team ID when the pool shows one, otherwise by team name and college."""
+def link_teams(rows, pool, label):
+    """Kanpur and Mathura have Team IDs but no usernames, so find each team in the pool:
+    by Team ID when the pool shows one, otherwise by team name and college.
+    If two pool teams look the same once spaces and case are ignored, keep the exact spelling."""
     by_id = {n["id"]: team["user"] for team in pool for n in team.get("names", [])}
     by_name = {}
     for team in pool:
-        by_name.setdefault((_norm(team["name"]), _norm(team["college"])), []).append(team["user"])
+        by_name.setdefault((_norm(team["name"]), _norm(team["college"])), []).append(team)
 
     linked = {}
     for row in rows:
         user = by_id.get(row["id"])
         if user is None:
-            matches = by_name.get((_norm(row["name"]), _norm(row["college"])), [])
+            college = COLLEGE_ALIASES.get(row["college"], row["college"])
+            matches = by_name.get((_norm(row["name"]), _norm(college)), [])
+            if len(matches) > 1:
+                matches = [team for team in matches if team["name"] == row["name"]]
             if len(matches) != 1:
-                raise DataError(f"Kanpur team {row['name']} matched {len(matches)} pool teams.")
-            user = matches[0]
+                raise DataError(f"{label} team {row['name']} ({row['college']}) does not match exactly one pool team.")
+            user = matches[0]["user"]
         if user in linked:
-            raise DataError(f"Kanpur lists pool team {user} twice.")
+            raise DataError(f"{label} lists pool team {user} twice.")
         linked[user] = {"status": row["status"], "number": row["number"], "id": row["id"], "quota": row["quota"]}
     return linked
 
 
-def build_dataset(teams, amritapuri, chennai, chennai_open_women, kanpur, checked):
+def build_dataset(teams, amritapuri, chennai, chennai_open_women, kanpur, mathura, checked):
+    """A team can stay on a regional list after leaving the final pool. Leave it out and
+    only count it, because the site never names teams that left the pool."""
     users = {team["user"] for team in teams}
-    for label, listed in (("Amritapuri", amritapuri), ("Chennai", chennai), ("Kanpur", kanpur)):
+    not_in_pool = {}
+    for label, listed in (("Amritapuri", amritapuri), ("Chennai", chennai), ("Kanpur", kanpur), ("Mathura", mathura)):
         unknown = set(listed) - users
-        if unknown:
-            raise DataError(f"{label} lists teams that are not in the pool: {sorted(unknown)[:5]}")
+        if len(unknown) > MAX_NOT_IN_POOL:
+            raise DataError(f"{label} lists {len(unknown)} teams that are not in the pool: {sorted(unknown)[:5]}")
+        if label in ("Amritapuri", "Chennai"):
+            not_in_pool[label.lower()] = len(unknown)
+        elif unknown:
+            raise DataError(f"{label} was linked to teams that are not in the pool: {sorted(unknown)[:5]}")
 
     merged = []
     counts = {"selected": 0, "two_regionals": 0, "waiting_only": 0, "not_listed": 0}
@@ -285,32 +364,38 @@ def build_dataset(teams, amritapuri, chennai, chennai_open_women, kanpur, checke
             team["chennai"] = chennai[user]
         if user in kanpur:
             team["kanpur"] = kanpur[user]
+        if user in mathura:
+            team["mathura"] = mathura[user]
         merged.append(team)
 
         selected_at = (
             (user in amritapuri)
             + (chennai.get(user, {}).get("status") == "selected")
             + (kanpur.get(user, {}).get("status") == "selected")
+            + (mathura.get(user, {}).get("status") == "selected")
         )
         if selected_at:
             counts["selected"] += 1
         if selected_at == 2:
             counts["two_regionals"] += 1
         if not selected_at:
-            counts["waiting_only" if user in kanpur or user in chennai else "not_listed"] += 1
+            counts["waiting_only" if user in kanpur or user in chennai or user in mathura else "not_listed"] += 1
 
     statuses = [entry["status"] for entry in kanpur.values()]
-    chennai_statuses = [entry["status"] for entry in chennai.values()]
+    chennai_statuses = [entry["status"] for user, entry in chennai.items() if user in users]
+    mathura_statuses = [entry["status"] for entry in mathura.values()]
     counts.update(
         pool=len(teams),
-        amritapuri=len(amritapuri),
+        amritapuri=len(set(amritapuri) & users),
         chennai=chennai_statuses.count("selected"),
         chennai_waiting=chennai_statuses.count("waiting"),
         chennai_open_women=chennai_open_women,
         kanpur=statuses.count("selected"),
         kanpur_waiting=statuses.count("waiting"),
+        mathura=mathura_statuses.count("selected"),
+        mathura_waiting=mathura_statuses.count("waiting"),
     )
-    return {"checked": checked, "counts": counts, "teams": merged}
+    return {"checked": checked, "counts": counts, "not_in_pool": not_in_pool, "teams": merged}
 
 
 def _page_path(name):
@@ -329,6 +414,8 @@ def download_all():
         _download(name, url)
     code_path = chennai_code_path(_page_path("chennai").read_text(encoding="utf-8"))
     _download("chennai_code", CHENNAI_SITE + code_path)
+    code_path = mathura_code_path(_page_path("mathura").read_text(encoding="utf-8"))
+    _download("mathura_code", MATHURA_SITE + code_path)
 
 
 def main(argv):
@@ -340,9 +427,10 @@ def main(argv):
     chennai_selected, open_slots = parse_chennai(read("chennai"))
     chennai = combine_chennai(chennai_selected, parse_chennai_waitlist(read("chennai"), read("chennai_code")))
     amritapuri = parse_amritapuri(read("amritapuri"))
-    kanpur = link_kanpur(parse_kanpur(read("kanpur")), pool)
+    kanpur = link_teams(parse_kanpur(read("kanpur")), pool, "Kanpur")
+    mathura = link_teams(parse_mathura(read("mathura_code")), pool, "Mathura")
     today = datetime.now(timezone(timedelta(hours=5, minutes=30))).date().isoformat()
-    data = build_dataset(pool, amritapuri, chennai, open_slots, kanpur, today)
+    data = build_dataset(pool, amritapuri, chennai, open_slots, kanpur, mathura, today)
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
@@ -350,8 +438,9 @@ def main(argv):
     for key, value in data["counts"].items():
         print(f"{key}: {value}")
     print(f"Wrote {OUTPUT} ({OUTPUT.stat().st_size // 1024} KB)")
-    if "<table" in read("mathura") or len(read("mathura")) > 5000:
-        print("NOTE: the Mathura page has changed. Check if its list is out and add it to this script.")
+    for regional, missing in data["not_in_pool"].items():
+        if missing:
+            print(f"NOTE: {missing} team(s) on the {regional} list are not in the final pool and were left out.")
 
 
 if __name__ == "__main__":

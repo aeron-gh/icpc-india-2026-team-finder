@@ -250,34 +250,113 @@ def kanpur_row(name, team_id, college, status="selected", number=1, quota="Gener
     return {"status": status, "number": number, "name": name, "id": team_id, "college": college, "quota": quota}
 
 
-class LinkKanpur(unittest.TestCase):
+class LinkTeams(unittest.TestCase):
     pool = [
         {"user": "u_id", "name": "Void / Void_", "college": "IIT Guwahati", "names": [{"regional": "Kanpur", "id": "1155310", "name": "Void_"}]},
         {"user": "u_name", "name": "Can't Decide a Name", "college": "COEP Tech"},
         {"user": "u_twin1", "name": "Gryffindor", "college": "Same College"},
         {"user": "u_twin2", "name": "Gryffindor", "college": "Same College"},
+        {"user": "u_spelled", "name": "Powerpuff girls", "college": "National Institute of Technology, Kurukshetra"},
+        {"user": "u_spaced", "name": "Power Puff Girls", "college": "National Institute of Technology, Kurukshetra"},
+        {"user": "u_kl", "name": "stackoverflow", "college": "Koneru Lakshmaiah Education Foundation"},
+        {"user": "u_nit", "name": "stackoverflow", "college": "National Institute of Technology, Silchar"},
     ]
 
     def test_links_by_team_id_even_when_the_name_differs(self):
-        linked = bd.link_kanpur([kanpur_row("Totally Different", "1155310", "Other")], self.pool)
+        linked = bd.link_teams([kanpur_row("Totally Different", "1155310", "Other")], self.pool, "Kanpur")
         self.assertEqual(list(linked), ["u_id"])
 
     def test_links_by_name_and_college_ignoring_case_and_punctuation(self):
-        linked = bd.link_kanpur([kanpur_row("CANT decide a name", "999", "coep-tech", "waiting", 4)], self.pool)
+        linked = bd.link_teams([kanpur_row("CANT decide a name", "999", "coep-tech", "waiting", 4)], self.pool, "Kanpur")
         self.assertEqual(linked, {"u_name": {"status": "waiting", "number": 4, "id": "999", "quota": "General"}})
+
+    def test_uses_the_hand_checked_name_for_a_college_written_differently(self):
+        linked = bd.link_teams([kanpur_row("stackoverflow", "1156836", "KL University H")], self.pool, "Mathura")
+        self.assertEqual(list(linked), ["u_kl"])
+
+    def test_picks_the_exact_spelling_when_two_teams_look_the_same(self):
+        row = kanpur_row("Powerpuff girls", "1153256", "National Institute of Technology, Kurukshetra")
+        self.assertEqual(list(bd.link_teams([row], self.pool, "Mathura")), ["u_spelled"])
 
     def test_stops_when_a_team_cannot_be_found(self):
         with self.assertRaises(bd.DataError):
-            bd.link_kanpur([kanpur_row("Nobody", "999", "Nowhere")], self.pool)
+            bd.link_teams([kanpur_row("Nobody", "999", "Nowhere")], self.pool, "Kanpur")
 
     def test_stops_instead_of_guessing_between_two_matches(self):
         with self.assertRaises(bd.DataError):
-            bd.link_kanpur([kanpur_row("Gryffindor", "999", "Same College")], self.pool)
+            bd.link_teams([kanpur_row("Gryffindor", "999", "Same College")], self.pool, "Kanpur")
+
+    def test_stops_when_two_rows_point_to_one_team(self):
+        rows = [kanpur_row("Void_", "1155310", "IIT Guwahati"), kanpur_row("Void", "1155310", "IIT Guwahati", number=2)]
+        with self.assertRaises(bd.DataError):
+            bd.link_teams(rows, self.pool, "Kanpur")
+
+
+def mathura_code(selected, waiting):
+    row = lambda n, name, team_id, quota: (
+        f'{{serialNo:{n},teamName:"{name}",institute:"College, City",teamId:"{team_id}",quota:"{quota}"}}'
+    )
+    sel = ",".join(row(*r) for r in selected)
+    wait = ",".join(row(*r) for r in waiting)
+    return (
+        f'const xy=1;Rr=[{sel}],q=2;ks=[{wait}];'
+        'function Zu(){o=Rr.length,s=Rr.filter(y=>y.quota==="General").length,u=ks.length}'
+    )
+
+
+class ParseMathura(unittest.TestCase):
+    selected = [(1, "odd_primes", "1155929", "General"), (2, 'say \\"hi\\"', "1160865", "Female")]
+    waiting = [(1, "TOTO_chalane_wale", "1165242", "General")]
+
+    def test_reads_selected_and_waiting_teams(self):
+        self.assertEqual(
+            bd.parse_mathura(mathura_code(self.selected, self.waiting)),
+            [
+                {"status": "selected", "number": 1, "name": "odd_primes", "id": "1155929", "college": "College, City", "quota": "General"},
+                {"status": "selected", "number": 2, "name": 'say "hi"', "id": "1160865", "college": "College, City", "quota": "All Women"},
+                {"status": "waiting", "number": 1, "name": "TOTO_chalane_wale", "id": "1165242", "college": "College, City", "quota": "General"},
+            ],
+        )
+
+    def test_tells_the_lists_apart_by_how_the_page_counts_them(self):
+        code = (
+            'ab=[{serialNo:1,teamName:"TOTO_chalane_wale",institute:"C",teamId:"1165242",quota:"General"}];'
+            'cd=[{serialNo:1,teamName:"odd_primes",institute:"C",teamId:"1155929",quota:"General"}];'
+            'function Zu(){o=cd.length,s=cd.filter(y=>y.quota==="General").length,u=ab.length}'
+        )
+        statuses = [(r["status"], r["name"]) for r in bd.parse_mathura(code)]
+        self.assertEqual(statuses, [("selected", "odd_primes"), ("waiting", "TOTO_chalane_wale")])
+
+    def test_stops_on_a_quota_it_does_not_know(self):
+        with self.assertRaises(bd.DataError):
+            bd.parse_mathura(mathura_code([(1, "a", "1", "Wildcard")], self.waiting))
+
+    def test_stops_when_a_row_is_written_in_a_new_shape(self):
+        code = mathura_code(self.selected, self.waiting).replace('quota:"General"}', 'quota:"General",extra:1}', 1)
+        with self.assertRaises(bd.DataError):
+            bd.parse_mathura(code)
+
+    def test_stops_when_serial_numbers_skip(self):
+        with self.assertRaises(bd.DataError):
+            bd.parse_mathura(mathura_code([(1, "a", "1", "General"), (3, "b", "2", "General")], self.waiting))
+
+    def test_stops_when_the_selected_list_cannot_be_told_apart(self):
+        code = mathura_code(self.selected, self.waiting).replace('quota==="General"', 'quota==="Open"')
+        with self.assertRaises(bd.DataError):
+            bd.parse_mathura(code)
+
+    def test_finds_the_code_file(self):
+        html = '<script type="module" crossorigin src="/assets/index-l8XHe1_4.js"></script>'
+        self.assertEqual(bd.mathura_code_path(html), "/assets/index-l8XHe1_4.js")
+
+    def test_stops_when_the_code_file_cannot_be_found(self):
+        with self.assertRaises(bd.DataError):
+            bd.mathura_code_path("<div id=root></div>")
 
 
 class BuildDataset(unittest.TestCase):
     def teams(self):
-        return [{"user": u, "name": u} for u in ("both", "kanpur", "wait", "cwait", "none")]
+        return [{"user": u, "name": u} for u in ("both", "kanpur", "wait", "cwait", "math", "mwait", "none")]
 
     def build(self, amritapuri=None):
         return bd.build_dataset(
@@ -289,7 +368,11 @@ class BuildDataset(unittest.TestCase):
                 "kanpur": {"status": "selected", "number": 1, "id": "1", "quota": "General"},
                 "wait": {"status": "waiting", "number": 1, "id": "2", "quota": "General"},
             },
-            "2026-11-02",
+            {
+                "math": {"status": "selected", "number": 1, "id": "3", "quota": "All Women"},
+                "mwait": {"status": "waiting", "number": 1, "id": "4", "quota": "General"},
+            },
+            "2026-11-05",
         )
 
     def test_attaches_each_list_to_the_right_team(self):
@@ -298,18 +381,19 @@ class BuildDataset(unittest.TestCase):
         self.assertEqual(by_user["both"]["chennai"], {"status": "selected", "category": "Overall topper"})
         self.assertEqual(by_user["cwait"]["chennai"], {"status": "waiting", "number": 1})
         self.assertEqual(by_user["wait"]["kanpur"]["status"], "waiting")
+        self.assertEqual(by_user["math"]["mathura"], {"status": "selected", "number": 1, "id": "3", "quota": "All Women"})
         self.assertEqual(set(by_user["none"]), {"user", "name"})
 
     def test_counts_selected_waiting_and_not_listed_teams(self):
         data = self.build()
-        self.assertEqual(data["checked"], "2026-11-02")
+        self.assertEqual(data["checked"], "2026-11-05")
         self.assertEqual(
             data["counts"],
             {
-                "pool": 5,
-                "selected": 2,
+                "pool": 7,
+                "selected": 3,
                 "two_regionals": 1,
-                "waiting_only": 2,
+                "waiting_only": 3,
                 "not_listed": 1,
                 "amritapuri": 1,
                 "chennai": 1,
@@ -317,8 +401,11 @@ class BuildDataset(unittest.TestCase):
                 "chennai_open_women": 4,
                 "kanpur": 1,
                 "kanpur_waiting": 1,
+                "mathura": 1,
+                "mathura_waiting": 1,
             },
         )
+        self.assertEqual(data["not_in_pool"], {"amritapuri": 0, "chennai": 0})
 
     def test_a_waiting_list_place_does_not_count_as_selected(self):
         data = bd.build_dataset(
@@ -327,17 +414,27 @@ class BuildDataset(unittest.TestCase):
             {"x": {"status": "waiting", "number": 3}},
             0,
             {"x": {"status": "selected", "number": 1, "id": "1", "quota": "General"}},
-            "2026-11-03",
+            {"x": {"status": "waiting", "number": 2, "id": "2", "quota": "General"}},
+            "2026-11-05",
         )
         self.assertEqual(data["counts"]["selected"], 1)
         self.assertEqual(data["counts"]["two_regionals"], 0)
         self.assertEqual(data["counts"]["waiting_only"], 0)
         self.assertEqual(data["counts"]["chennai"], 0)
         self.assertEqual(data["counts"]["chennai_waiting"], 1)
+        self.assertEqual(data["counts"]["mathura"], 0)
 
-    def test_stops_when_a_selected_team_is_not_in_the_pool(self):
+    def test_skips_and_counts_a_team_that_left_the_pool_without_naming_it(self):
+        data = self.build(amritapuri={"both": {"centre": "Mysuru", "rank": 1}, "gone": {"centre": "Coimbatore", "rank": 236}})
+        self.assertNotIn("gone", {t["user"] for t in data["teams"]})
+        self.assertNotIn("gone", str(data))
+        self.assertEqual(data["counts"]["amritapuri"], 1)
+        self.assertEqual(data["not_in_pool"], {"amritapuri": 1, "chennai": 0})
+
+    def test_stops_when_many_listed_teams_are_not_in_the_pool(self):
+        ghosts = {f"ghost{i}": {"centre": "Mysuru", "rank": i} for i in range(4)}
         with self.assertRaises(bd.DataError):
-            self.build(amritapuri={"ghost": {"centre": "Mysuru", "rank": 1}})
+            self.build(amritapuri=ghosts)
 
 
 if __name__ == "__main__":
