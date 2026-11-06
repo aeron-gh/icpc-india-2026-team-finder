@@ -1,6 +1,6 @@
 # ICPC India 2026 Team Finder
 
-An unofficial page that puts the ICPC India 2026 lists in one place. Search for a team to see its rank, where it was selected, and links to its submissions.
+An unofficial page that puts the ICPC India 2026 lists in one place. Search for a team to see its rank, where it was selected, and links to its submissions. Pin a team to keep it at the top, or share a link to a team or to any filtered list.
 
 It is a plain static site. The page is in `public/` and needs no build step.
 

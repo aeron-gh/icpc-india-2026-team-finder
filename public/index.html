@@ -33,6 +33,11 @@
   </details>
 
   <main id="finder">
+    <section class="pinned" id="pinned" aria-labelledby="pinnedTitle" hidden>
+      <h2 id="pinnedTitle">Pinned teams</h2>
+      <ul class="pins" id="pins"></ul>
+    </section>
+
     <div class="controls">
       <label class="field field-search">
         <span class="sr">Search</span>
@@ -65,7 +70,11 @@
       <button type="button" class="text-button" id="clear" hidden>Clear filters</button>
     </div>
 
-    <p class="fine" id="legend" hidden>Filled dots are solved problems. Select one to see that team's submissions on CodeChef. Rank comes from the final selection pool. Each regional picks teams by its own rules, so a higher rank does not always mean selected.</p>
+    <div class="skeleton" id="skeleton" aria-hidden="true">
+      <span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span>
+    </div>
+
+    <p class="fine" id="legend" hidden>Filled dots are solved problems. Select one to see that team's submissions on CodeChef. Press the pin next to a team to keep it at the top; pins are saved on this device only. Rank comes from the final selection pool. Each regional picks teams by its own rules, so a higher rank does not always mean selected.</p>
 
     <table class="teams" id="teams" hidden>
       <thead><tr id="head"></tr></thead>
@@ -87,6 +96,7 @@
     <ul class="links" id="links"></ul>
   </footer>
 </div>
+<p class="toast" id="toast" role="status"></p>
 <noscript><p class="page">This page needs JavaScript to search the team list.</p></noscript>
 </body>
 </html>

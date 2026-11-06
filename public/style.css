@@ -8,6 +8,9 @@
   --ac: #0b7a4b;
   --wait: #8a5b00;
   --link: #17599e;
+  --soft: #f1f4f7;
+  /* How long animations take. Raised below only for people who have not turned motion off. */
+  --dur: 0ms;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -20,6 +23,7 @@
     --ac: #4cc38a;
     --wait: #e0b04e;
     --link: #7db4ee;
+    --soft: #1b232c;
   }
 }
 
@@ -224,6 +228,66 @@ h1 {
 
 .regional .site-links a + a {
   margin-left: 12px;
+}
+
+/* Pinned teams */
+
+.pinned {
+  margin-bottom: 28px;
+  padding: 12px 16px 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+}
+
+.pinned h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.pins {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pin-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.pin-card:first-child .pin-inner {
+  border-top: 0;
+}
+
+.pin-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.pin-meta {
+  color: var(--muted);
+}
+
+.unpin {
+  margin-left: auto;
+}
+
+.pin-next {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.pin-next b {
+  color: var(--ink);
+  font-weight: 600;
 }
 
 /* Search and filters */
@@ -468,6 +532,45 @@ a.dot:hover::before {
 .more-cell {
   padding-right: 0 !important;
   text-align: right;
+  white-space: nowrap;
+}
+
+.pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-height: 30px;
+  margin-right: 6px;
+  padding: 0;
+  border-color: transparent;
+  color: var(--muted);
+  vertical-align: middle;
+}
+
+.pin:hover {
+  color: var(--ink);
+}
+
+.pin svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.pin[aria-pressed="true"] {
+  color: var(--ac);
+}
+
+.pin[aria-pressed="true"] svg {
+  fill: currentColor;
+}
+
+.pin-word {
+  display: none;
 }
 
 .more {
@@ -514,6 +617,158 @@ a.dot:hover::before {
 
 .detail .problem-no {
   color: var(--muted);
+}
+
+.share-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+
+.share {
+  min-height: 32px;
+  padding: 4px 12px;
+  border-color: var(--link);
+  color: var(--link);
+  font-size: 13px;
+}
+
+.share-url {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/* Opening and closing: the details panel and pinned cards */
+
+.reveal {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+
+.reveal > div {
+  min-height: 0;
+}
+
+.reveal.moving > div {
+  overflow: hidden;
+}
+
+/* Grey bars while the list loads */
+
+.skeleton {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.bar {
+  display: block;
+  height: 46px;
+  border-radius: 6px;
+  background: var(--line);
+}
+
+/* "Link copied" */
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  z-index: 10;
+  max-width: calc(100% - 32px);
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 14px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.toast.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Motion, only for people who have not asked their device for less of it */
+
+@media (prefers-reduced-motion: no-preference) {
+  :root {
+    --dur: 280ms;
+  }
+
+  .reveal {
+    transition: grid-template-rows var(--dur) ease, opacity var(--dur) ease;
+  }
+
+  .reveal.shut {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+
+  .teams tbody.fresh .team-row {
+    animation: rise var(--dur) ease both;
+    animation-delay: calc(var(--i, 0) * 30ms);
+  }
+
+  .pin,
+  .pin svg {
+    transition: color var(--dur) ease, fill var(--dur) ease;
+  }
+
+  .pin.popped svg {
+    animation: pop var(--dur) ease;
+  }
+
+  .bar {
+    background: linear-gradient(90deg, var(--line) 30%, var(--soft) 50%, var(--line) 70%);
+    background-size: 300% 100%;
+    animation: sweep 1.1s linear infinite;
+  }
+
+  .toast {
+    transition: opacity var(--dur) ease, transform var(--dur) ease, visibility 0s linear var(--dur);
+  }
+
+  .toast:not(.show) {
+    transform: translate(-50%, 12px);
+  }
+
+  .toast.show {
+    transition-delay: 0s;
+  }
+
+  .dates[open] .regionals {
+    animation: rise var(--dur) ease;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes pop {
+  40% {
+    transform: scale(1.4);
+  }
+}
+
+@keyframes sweep {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
 }
 
 .empty p {
@@ -677,7 +932,26 @@ footer {
   }
 
   .more {
-    min-height: 36px;
+    min-height: 44px;
+  }
+
+  .pin {
+    width: auto;
+    min-width: 44px;
+    min-height: 44px;
+    margin-right: 8px;
+    padding: 0 12px;
+    border-color: var(--line-strong);
+    font-size: 13px;
+  }
+
+  .pin-word {
+    display: inline;
+    margin-left: 6px;
+  }
+
+  .share {
+    min-height: 40px;
   }
 
   .detail {

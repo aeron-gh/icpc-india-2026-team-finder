@@ -101,6 +101,56 @@ export function filterTeams(teams, { query = "", show = "all", solved = "", coll
   );
 }
 
+/* The web address holds the filters, so a copied link opens the same view. */
+
+export const NO_FILTERS = { query: "", show: "all", solved: "", college: "", regionals: [], match: "any", page: 1 };
+
+export function filtersToQuery(filters) {
+  const params = new URLSearchParams();
+  if (filters.query.trim()) params.set("q", filters.query.trim());
+  if (filters.show !== "all") params.set("show", filters.show);
+  if (filters.solved !== "") params.set("solved", filters.solved);
+  if (filters.college) params.set("college", filters.college);
+  for (const key of filters.regionals) params.append("at", key);
+  if (filters.match === "all") params.set("match", "all");
+  if (filters.page > 1) params.set("page", String(filters.page));
+  const text = params.toString();
+  return text ? `?${text}` : "";
+}
+
+// Anything unknown falls back to no filter. Show, solved and college are checked
+// again against the page's own options, since only the page knows which exist.
+export function filtersFromQuery(search, regionalKeys) {
+  const params = new URLSearchParams(search);
+  const solved = params.get("solved") ?? "";
+  const page = Number(params.get("page"));
+  const ticked = new Set(params.getAll("at"));
+  return {
+    query: params.get("q") ?? "",
+    show: params.get("show") ?? "all",
+    solved: /^\d+$/.test(solved) ? solved : "",
+    college: params.get("college") ?? "",
+    regionals: regionalKeys.filter((key) => ticked.has(key)),
+    match: params.get("match") === "all" ? "all" : "any",
+    page: Number.isInteger(page) && page > 1 ? page : 1,
+  };
+}
+
+/* Pinned teams are saved in the browser as a list of usernames. */
+
+// A team that left the final pool is dropped here, so its pin quietly disappears.
+export function pinsFrom(saved, teams) {
+  let list;
+  try {
+    list = JSON.parse(saved);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(list)) return [];
+  const known = new Set(teams.map((team) => team.user));
+  return [...new Set(list)].filter((user) => known.has(user));
+}
+
 export function collegeOptions(teams) {
   const labels = new Map(teams.map((team) => [team.college, team.short]));
   return [...labels]
@@ -168,4 +218,12 @@ export function nextDeadline(regionals, now) {
     .filter((deadline) => !isClosed(deadline.iso, now))
     .sort((a, b) => new Date(a.iso) - new Date(b.iso));
   return open[0] ?? null;
+}
+
+// The next open deadline at each regional where the team is selected.
+export function teamDeadlines(team, regionals, now) {
+  return regionals
+    .filter((regional) => regionalStatus(team, regional.key).kind === "selected")
+    .map((regional) => nextDeadline([regional], now))
+    .filter(Boolean);
 }

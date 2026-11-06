@@ -4,26 +4,33 @@
 
 import { LINKS, REGIONALS } from "./info.js";
 import {
+  NO_FILTERS,
   SHOW_GROUPS,
   collegeOptions,
   filterTeams,
+  filtersFromQuery,
+  filtersToQuery,
   isClosed,
   nextDeadline,
   number,
   onAnyList,
   paginate,
+  pinsFrom,
   prepareTeams,
   regionalStatus,
   resultText,
   submissionLinks,
+  teamDeadlines,
 } from "./logic.js";
 
 const PAGE_SIZE = 100;
+const PIN_STORE = "pinned-teams";
 const LISTS_OUT = REGIONALS.filter((regional) => regional.published);
 const byId = (id) => document.getElementById(id);
 
-const state = { query: "", show: "all", solved: "", college: "", regionals: [], match: "any", page: 1 };
+const state = { ...NO_FILTERS };
 let teams = [];
+let pins = [];
 
 function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
@@ -36,6 +43,167 @@ function el(tag, props = {}, ...children) {
 }
 
 const externalLink = (text, href, props = {}) => el("a", { href, target: "_blank", rel: "noopener", ...props }, text);
+
+function svg(tag, attributes) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
+  return node;
+}
+
+/* Motion */
+
+// How long animations take comes from style.css, which makes it 0 when someone turns motion off.
+const motion = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--dur")) || 0;
+
+// "shut" is the closed look. Removing it two frames after the node appears lets the opening play.
+// "moving" hides overflow only while it plays, so focus outlines are not cut off afterwards.
+function enter(node) {
+  const time = motion();
+  if (!time) return;
+  node.classList.add("shut", "moving");
+  requestAnimationFrame(() => requestAnimationFrame(() => node.classList.remove("shut")));
+  setTimeout(() => node.classList.remove("moving"), time + 50);
+}
+
+function leave(node, done) {
+  node.classList.add("shut", "moving");
+  setTimeout(done, motion());
+}
+
+let toastTimer;
+function toast(text) {
+  byId("toast").textContent = text;
+  byId("toast").classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => byId("toast").classList.remove("show"), 2000);
+}
+
+/* Sharing */
+
+const teamLink = (team) => `${location.origin}${location.pathname}${filtersToQuery({ ...NO_FILTERS, query: team.user })}`;
+
+// Phones open their share menu. Elsewhere the link is copied.
+async function share(team) {
+  const url = teamLink(team);
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: team.name, url });
+      return;
+    } catch (error) {
+      if (error.name === "AbortError") return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    toast("Link copied");
+  } catch {
+    toast("Copy the link shown next to the button");
+  }
+}
+
+/* Pinned teams. Storage can be blocked, so pins then last only for this visit. */
+
+function loadPins() {
+  let saved = null;
+  try {
+    saved = localStorage.getItem(PIN_STORE);
+  } catch {}
+  pins = pinsFrom(saved, teams);
+  savePins();
+}
+
+function savePins() {
+  try {
+    localStorage.setItem(PIN_STORE, JSON.stringify(pins));
+  } catch {}
+}
+
+function showPinState(button, team) {
+  const on = pins.includes(team.user);
+  button.setAttribute("aria-pressed", String(on));
+  button.setAttribute("aria-label", on ? `Unpin ${team.name}` : `Pin ${team.name} to the top`);
+  button.title = on ? "Unpin" : "Pin to the top";
+  // Phones have no hover to show the title, so they also show a word.
+  button.querySelector(".pin-word").textContent = on ? "Pinned" : "Pin";
+}
+
+function pinButton(team) {
+  const button = el(
+    "button",
+    { type: "button", className: "pin", "data-user": team.user },
+    svg("svg", { viewBox: "0 0 16 16", "aria-hidden": "true" }),
+    el("span", { className: "pin-word", "aria-hidden": "true" }),
+  );
+  button.firstChild.append(svg("circle", { cx: "8", cy: "5.5", r: "3.8" }), svg("path", { d: "M8 9.3V15" }));
+  showPinState(button, team);
+  button.addEventListener("click", () => togglePin(team));
+  return button;
+}
+
+function togglePin(team) {
+  const on = !pins.includes(team.user);
+  pins = on ? [...pins, team.user] : pins.filter((user) => user !== team.user);
+  savePins();
+  for (const button of document.querySelectorAll("#rows .pin")) {
+    if (button.dataset.user !== team.user) continue;
+    showPinState(button, team);
+    button.classList.remove("popped");
+    if (on) {
+      void button.offsetWidth;
+      button.classList.add("popped");
+    }
+  }
+  const card = [...byId("pins").children].find((item) => item.dataset.user === team.user);
+  if (!on && card) leave(card, () => renderPins());
+  else renderPins(on ? team.user : null);
+}
+
+function pinCard(team, fresh) {
+  const statuses = LISTS_OUT.map((regional) => [regional, regionalStatus(team, regional.key)]).filter(
+    ([, status]) => status.kind !== "none",
+  );
+  const unpin = el("button", { type: "button", className: "text-button unpin" }, "Unpin");
+  unpin.addEventListener("click", () => togglePin(team));
+  const deadlines = teamDeadlines(team, LISTS_OUT, new Date()).map((deadline) =>
+    el(
+      "p",
+      { className: "pin-next" },
+      el("b", {}, "Next deadline: "),
+      deadline.url ? externalLink(deadline.label, deadline.url) : deadline.label,
+      ` (${deadline.regional}), ${deadline.when}`,
+    ),
+  );
+  const card = el(
+    "li",
+    { className: "pin-card reveal", "data-user": team.user },
+    el(
+      "div",
+      {},
+      el(
+        "div",
+        { className: "pin-inner" },
+        el("span", { className: "pin-name" }, team.name),
+        el("span", { className: "pin-meta" }, `${team.short} · Rank ${number(team.rank)}`),
+        ...(statuses.length
+          ? statuses.map(([regional, status]) =>
+              el("span", { className: `status-${status.kind}` }, `${regional.name}: ${statusText(status)}`),
+            )
+          : [el("span", { className: "pin-meta" }, "Not on a published list yet")]),
+        unpin,
+        ...deadlines,
+      ),
+    ),
+  );
+  if (fresh) enter(card);
+  return card;
+}
+
+// Teams are in rank order, so pins are too.
+function renderPins(fresh = null) {
+  const pinned = teams.filter((team) => pins.includes(team.user));
+  byId("pinned").hidden = pinned.length === 0;
+  byId("pins").replaceChildren(...pinned.map((team) => pinCard(team, team.user === fresh)));
+}
 
 /* Top of the page */
 
@@ -154,13 +322,33 @@ function fillFilters() {
   );
 }
 
+// A shared link sets the filters. A value the page has no option for stays at its default.
+function applyLink() {
+  const wanted = filtersFromQuery(location.search, LISTS_OUT.map((regional) => regional.key));
+  const choose = (id, value, fallback) => {
+    const box = byId(id);
+    box.value = value;
+    if (box.selectedIndex < 0 || box.value !== value) box.value = fallback;
+    return box.value;
+  };
+  Object.assign(state, wanted, {
+    show: choose("show", wanted.show, "all"),
+    solved: choose("solved", wanted.solved, ""),
+    college: choose("college", wanted.college, ""),
+  });
+  byId("search").value = wanted.query;
+  for (const box of byId("regionalChecks").querySelectorAll("input")) box.checked = wanted.regionals.includes(box.value);
+  document.querySelector(`input[name="match"][value="${wanted.match}"]`).checked = true;
+}
+
 function watchFilters() {
-  const update = (key) => (event) => {
+  // Rows slide in after a filter change, but not on every letter typed.
+  const update = (key, animate = true) => (event) => {
     state[key] = event.target.value;
     state.page = 1;
-    renderTeams();
+    renderTeams({ animate });
   };
-  byId("search").addEventListener("input", update("query"));
+  byId("search").addEventListener("input", update("query", false));
   byId("show").addEventListener("change", update("show"));
   byId("solved").addEventListener("change", update("solved"));
   byId("college").addEventListener("change", update("college"));
@@ -174,7 +362,7 @@ function watchFilters() {
   });
 
   byId("clear").addEventListener("click", () => {
-    Object.assign(state, { query: "", show: "all", solved: "", college: "", regionals: [], match: "any", page: 1 });
+    Object.assign(state, NO_FILTERS);
     for (const box of boxes()) box.checked = false;
     document.querySelector('input[name="match"][value="any"]').checked = true;
     byId("search").value = "";
@@ -188,7 +376,7 @@ function watchFilters() {
   const turnPage = (change) => () => {
     state.page += change;
     renderTeams();
-    byId("result").scrollIntoView();
+    byId("result").scrollIntoView({ behavior: motion() ? "smooth" : "auto" });
   };
   byId("prev").addEventListener("click", turnPage(-1));
   byId("nextPage").addEventListener("click", turnPage(1));
@@ -226,12 +414,15 @@ function dots(team) {
   return el("span", { className: "dots" }, ...items);
 }
 
+// A non-breaking space keeps the tick on the same line as its first word.
+function statusText(status) {
+  return status.kind === "selected" ? `✓\u00a0${status.text}` : status.text || "–";
+}
+
 function statusCell(team, regional) {
   const status = regionalStatus(team, regional.key);
   const className = `status-cell label-cell status-${status.kind}`;
-  // A non-breaking space keeps the tick on the same line as its first word.
-  const text = status.kind === "selected" ? `✓ ${status.text}` : status.text || "–";
-  return el("td", { className, "data-label": `${regional.name}:` }, text);
+  return el("td", { className, "data-label": `${regional.name}:` }, statusText(status));
 }
 
 function detailRow(team) {
@@ -268,11 +459,17 @@ function detailRow(team) {
     );
   }
 
+  const shareButton = el("button", { type: "button", className: "share" }, "Share link");
+  shareButton.addEventListener("click", () => share(team));
+  const shareRow = el("p", { className: "share-row" }, shareButton, el("span", { className: "share-url" }, teamLink(team)));
+
+  const box = el("div", { className: "reveal" }, el("div", {}, list, shareRow));
+  enter(box);
   const span = 6 + LISTS_OUT.length;
-  return el("tr", { className: "detail" }, el("td", { colSpan: span }, list));
+  return el("tr", { className: "detail" }, el("td", { colSpan: span }, box));
 }
 
-function teamRow(team) {
+function teamRow(team, index) {
   const open = el("button", { type: "button", className: "more", "aria-expanded": "false" }, "Details");
   const row = el(
     "tr",
@@ -288,15 +485,18 @@ function teamRow(team) {
     el("td", { className: "num label-cell", "data-label": "Time" }, team.time),
     el("td", { className: "num label-cell", "data-label": "Penalty" }, String(team.penalty)),
     ...LISTS_OUT.map((regional) => statusCell(team, regional)),
-    el("td", { className: "more-cell" }, open),
+    el("td", { className: "more-cell" }, pinButton(team), open),
   );
+  // The first rows slide in one after another; the rest arrive together.
+  row.style.setProperty("--i", String(Math.min(index, 12)));
   if (!onAnyList(team)) {
     row.insertBefore(el("td", { className: "none-note" }, "Not on a published list yet"), row.lastChild);
   }
   open.addEventListener("click", () => {
     const next = row.nextElementSibling;
-    if (next?.classList.contains("detail")) {
-      next.remove();
+    if (next?.classList.contains("detail") && !next.classList.contains("closing")) {
+      next.classList.add("closing");
+      leave(next.querySelector(".reveal"), () => next.remove());
       open.textContent = "Details";
       open.setAttribute("aria-expanded", "false");
     } else {
@@ -318,13 +518,19 @@ function renderMatchRule() {
   byId("matchAll").textContent = `All of these (${number(all)})`;
 }
 
-function renderTeams() {
+function renderTeams({ animate = true } = {}) {
   renderMatchRule();
   const view = paginate(filterTeams(teams, state), state.page, PAGE_SIZE);
   state.page = view.page;
   const found = view.total > 0;
 
-  byId("rows").replaceChildren(...view.items.map(teamRow));
+  const rows = byId("rows");
+  rows.classList.remove("fresh");
+  rows.replaceChildren(...view.items.map(teamRow));
+  if (animate) {
+    void rows.offsetWidth;
+    rows.classList.add("fresh");
+  }
   byId("teams").hidden = !found;
   byId("empty").hidden = found;
   byId("pager").hidden = view.pages === 1;
@@ -334,6 +540,10 @@ function renderTeams() {
   byId("nextPage").disabled = view.page === view.pages;
   byId("result").textContent = resultText(view);
   byId("clear").hidden = !(state.query || state.show !== "all" || state.solved || state.college || state.regionals.length);
+
+  // replaceState changes the address without adding a Back step.
+  const address = location.pathname + filtersToQuery(state);
+  if (address !== location.pathname + location.search) history.replaceState(null, "", address);
 }
 
 async function start() {
@@ -347,11 +557,21 @@ async function start() {
     renderHead();
     fillRegionalChecks(data.counts);
     fillFilters();
+    const fromLink = location.search !== "";
+    applyLink();
+    loadPins();
+    renderPins();
     watchFilters();
+    byId("skeleton").hidden = true;
     renderTeams();
+    // A link to one team opens its details.
+    const shown = byId("rows").querySelectorAll(".team-row");
+    if (fromLink && shown.length === 1) shown[0].querySelector(".more").click();
   } catch (error) {
     console.error(error);
     byId("result").textContent = "The team list did not load. Refresh the page to try again.";
+  } finally {
+    byId("skeleton").hidden = true;
   }
 }
 

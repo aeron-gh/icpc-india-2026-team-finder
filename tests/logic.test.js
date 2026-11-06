@@ -1,16 +1,21 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  NO_FILTERS,
   collegeOptions,
   filterTeams,
+  filtersFromQuery,
+  filtersToQuery,
   nextDeadline,
   onAnyList,
   paginate,
+  pinsFrom,
   prepareTeams,
   regionalStatus,
   resultText,
   submissionLinks,
   isClosed,
+  teamDeadlines,
 } from "../public/logic.js";
 
 const base = { solved: 6, time: "01:00:00", penalty: 0, problems: "1111110000" };
@@ -340,4 +345,73 @@ test("a team on any one regional list, Mathura included, is on a list", () => {
   assert.equal(onAnyList(mathuraWaiting), true);
   assert.equal(onAnyList(criticalPath), true);
   assert.equal(onAnyList(phiChance), false);
+});
+
+test("no filters give a plain address", () => {
+  assert.equal(filtersToQuery(NO_FILTERS), "");
+});
+
+test("filters become a short address that only names what changed", () => {
+  const filters = { ...NO_FILTERS, query: " iit roorkee ", regionals: ["kanpur", "mathura"], match: "all", page: 2 };
+  assert.equal(filtersToQuery(filters), "?q=iit+roorkee&at=kanpur&at=mathura&match=all&page=2");
+  assert.equal(
+    filtersToQuery({ ...NO_FILTERS, show: "kanpur-waiting", solved: "6", college: "Indian Institute of Technology - Roorkee" }),
+    "?show=kanpur-waiting&solved=6&college=Indian+Institute+of+Technology+-+Roorkee",
+  );
+});
+
+const KEYS = ["amritapuri", "chennai", "kanpur", "mathura"];
+
+test("an address gives back its filters", () => {
+  assert.deepEqual(filtersFromQuery("?q=iit+roorkee&at=mathura&at=kanpur&match=all&page=2&solved=6", KEYS), {
+    query: "iit roorkee",
+    show: "all",
+    solved: "6",
+    college: "",
+    regionals: ["kanpur", "mathura"],
+    match: "all",
+    page: 2,
+  });
+  assert.deepEqual(filtersFromQuery("", KEYS), NO_FILTERS);
+});
+
+test("broken or unknown address values fall back to no filter", () => {
+  const got = filtersFromQuery("?at=pune&at=kanpur&at=kanpur&match=maybe&page=-3&solved=six", KEYS);
+  assert.deepEqual([got.regionals, got.match, got.page, got.solved], [["kanpur"], "any", 1, ""]);
+  assert.equal(filtersFromQuery("?page=2.5", KEYS).page, 1);
+  assert.deepEqual(filtersFromQuery("?at=mathura", ["kanpur"]).regionals, []);
+});
+
+test("saved pins keep only teams that are still in the list, once each", () => {
+  const saved = JSON.stringify(["icpcol263530", "icpcol269999", "icpcol263530", 5, null, "icpcol260148"]);
+  assert.deepEqual(pinsFrom(saved, teams), ["icpcol263530", "icpcol260148"]);
+});
+
+test("unreadable saved pins mean no pins", () => {
+  for (const saved of [null, "", "not json", "{\"a\":1}", "\"icpcol263530\"", "42"]) {
+    assert.deepEqual(pinsFrom(saved, teams), [], String(saved));
+  }
+});
+
+test("a pinned team sees the next open deadline of each regional that selected it", () => {
+  const regionals = [
+    { key: "chennai", name: "Chennai", deadlines: [{ label: "Confirm", when: "18 Nov", iso: "2026-11-18T23:59:00+05:30" }] },
+    {
+      key: "kanpur",
+      name: "Kanpur",
+      deadlines: [
+        { label: "Email", when: "5 Nov", iso: "2026-11-05T22:00:00+05:30" },
+        { label: "Fee", when: "12 Nov", iso: "2026-11-12T17:00:00+05:30" },
+      ],
+    },
+    { key: "amritapuri", name: "Amritapuri", deadlines: [] },
+  ];
+  const now = new Date("2026-11-06T12:00:00+05:30");
+  assert.deepEqual(
+    teamDeadlines(hogabhai, regionals, now).map((deadline) => `${deadline.regional}: ${deadline.label}`),
+    ["Chennai: Confirm", "Kanpur: Fee"],
+  );
+  assert.deepEqual(teamDeadlines(criticalPath, regionals, now).map((deadline) => deadline.regional), ["Chennai"]);
+  assert.deepEqual(teamDeadlines(threeOfAKind, regionals, now).map((deadline) => deadline.regional), ["Chennai"]);
+  assert.deepEqual(teamDeadlines(hogabhai, regionals, new Date("2026-12-01T00:00:00+05:30")), []);
 });
